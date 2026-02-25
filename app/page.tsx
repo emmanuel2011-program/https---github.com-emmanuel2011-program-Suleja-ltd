@@ -1,33 +1,66 @@
 import AcmeLogo from '@/app/ui/acme-logo';
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import styles from '@/app/ui/home.module.css';
+import { lusitana } from '@/app/ui/fonts';
+import Image from 'next/image';
+
 
 export default function Page() {
   return (
     <main className="flex min-h-screen flex-col p-6">
-      <div className="flex h-20 shrink-0 items-end rounded-lg bg-blue-500 p-4 md:h-52">
-        {/* <AcmeLogo /> */}
-      </div>
-      <div className="mt-4 flex grow flex-col gap-4 md:flex-row">
-        <div className="flex flex-col justify-center gap-6 rounded-lg bg-gray-50 px-6 py-10 md:w-2/5 md:px-20">
-          <p className={`text-xl text-gray-800 md:text-3xl md:leading-normal`}>
-            <strong>Welcome to Acme.</strong> This is the example for the{' '}
-            <a href="https://nextjs.org/learn/" className="text-blue-500">
-              Next.js Learn Course
-            </a>
-            , brought to you by Vercel.
+      {/* Hero Section */}
+      <section id="home" className="mt-6 flex flex-col md:flex-row gap-6">
+        <div className="flex flex-col justify-center gap-4 md:w-2/5 bg-white p-6 rounded-lg shadow">
+          <p className="text-xl md:text-3xl font-bold text-gray-800">
+            WELCOME TO <br />
+            SULEJA HH MULTIPURPOSE COOPERATIVE SOC NIGERIA LIMITED
           </p>
+          <p className="text-gray-700">
+            Working Together with God to Empower Others. Learn more about our cooperative activities below.
+          </p>
+
           <Link
-            href="/login"
-            className="flex items-center gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
+            href="/about"
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
           >
-            <span>Log in</span> <ArrowRightIcon className="w-5 md:w-6" />
+            Learn More <ArrowRightIcon className="w-4 h-4" />
           </Link>
         </div>
-        <div className="flex items-center justify-center p-6 md:w-3/5 md:px-28 md:py-12">
-          {/* Add Hero Images Here */}
+
+        <div className="md:w-3/5 flex justify-center items-center">
+          <Image
+            src="/hero-desktop.png"
+            width={1000}
+            height={760}
+            alt="Cooperative hero"
+            className="hidden md:block"
+          />
+          <Image
+            src="/hero-mobile.png"
+            width={560}
+            height={620}
+            className="block md:hidden"
+            alt="Screenshot of the dashboard project showing mobile version"
+          />
         </div>
-      </div>
+      </section>
+
+      {/* Customers Section */}
+      <section id="customers" className="mt-12 p-6 bg-white rounded-lg shadow">
+        <h2 className="text-2xl font-semibold mb-2">Our Customers</h2>
+        <p>Details of our active and valued customers.</p>
+      </section>
+
+      {/* Loan Services Section */}
+      <section id="loans" className="mt-12 p-6 bg-white rounded-lg shadow text-center">
+        <h2 className="text-2xl font-semibold mb-2">Loan Services</h2>
+        <p className="mb-4">
+          Become a member and apply for cooperative loans easily through our online application system.
+        </p>
+
+      </section>
+
     </main>
   );
 }
