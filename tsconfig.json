@@ -28,7 +28,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "app/lib/placeholder-data.ts",
+    "app/lib/cooperative-data.ts",
     "scripts/seed.js",
     ".next/dev/types/**/*.ts"
   ],
