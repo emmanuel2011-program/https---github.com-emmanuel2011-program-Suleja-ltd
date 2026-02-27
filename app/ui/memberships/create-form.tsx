@@ -8,6 +8,7 @@ import {
   HomeIcon,
   CalendarIcon,
   IdentificationIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
 import { createMembership } from '@/app/lib/actions';
@@ -18,6 +19,7 @@ import { useState } from 'react';
 export default function MembershipForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Validation helpers
   const isValidPhone = (phone: string) => /^\d{11}$/.test(phone);
@@ -25,7 +27,6 @@ export default function MembershipForm() {
 
   /**
    * Main form handler
-   * Explicitly returns Promise<void> to satisfy TypeScript
    */
   async function handleAction(formData: FormData): Promise<void> {
     const phone = formData.get('mobilePhone') as string;
@@ -50,7 +51,8 @@ export default function MembershipForm() {
 
       if (result?.success) {
         toast.success('Membership created successfully!', { id: toastId });
-        router.push('/membership');
+        setIsSubmitted(true); // Switch to Success UI
+        setIsLoading(false);
       } else {
         toast.error(result?.message || 'An unexpected error occurred', { id: toastId });
         setIsLoading(false);
@@ -61,14 +63,43 @@ export default function MembershipForm() {
     }
   }
 
-  // UI helper to keep inputs numeric and within length limits
+  // UI helper to keep inputs numeric
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>, max: number) => {
     const val = e.target.value.replace(/\D/g, ''); 
     e.target.value = val.slice(0, max);
   };
 
+  // --- SUCCESS STATE UI ---
+  if (isSubmitted) {
+    return (
+      <div className="max-w-2xl mx-auto text-center p-10 bg-white rounded-xl shadow-sm border border-green-100 mt-10">
+        <div className="mb-4 flex justify-center">
+          <CheckCircleIcon className="h-16 w-16 text-green-500 animate-bounce" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800">Success!</h2>
+        <p className="text-gray-500 mt-2">
+          The member has been successfully registered in the system.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+          <Button 
+            onClick={() => setIsSubmitted(false)} 
+            className="bg-green-600 hover:bg-green-700 px-6"
+          >
+            Add Another Member
+          </Button>
+          <Link 
+            href="/dashboard/memberships" 
+            className="flex h-10 items-center justify-center rounded-lg bg-gray-100 px-6 text-sm font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            Go to Directory
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // --- FORM UI ---
   return (
-    // "as any" is used here to bypass the React/Next.js type conflict squiggle
     <form action={handleAction as any} className="max-w-2xl mx-auto">
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
@@ -76,9 +107,7 @@ export default function MembershipForm() {
           Member Information
         </h2>
 
-        {/* Grid Layout - Compact View */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
           {/* Surname */}
           <div>
             <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Surname *</label>
@@ -201,7 +230,7 @@ export default function MembershipForm() {
 
       <div className="mt-6 flex justify-between items-center gap-4">
         <Link
-          href="/membership"
+          href="/dashboard/memberships"
           className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
         >
           Cancel & Exit
