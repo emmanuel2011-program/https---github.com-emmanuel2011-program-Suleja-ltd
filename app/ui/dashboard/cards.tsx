@@ -1,31 +1,30 @@
 import {
   BanknotesIcon,
-  ClockIcon,
   UserGroupIcon,
-  InboxIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import { lusitana } from '@/app/ui/fonts';
 
 const iconMap = {
-  collected: BanknotesIcon,
-  customers: UserGroupIcon,
-  pending: ClockIcon,
-  invoices: InboxIcon,
+  portfolio: BanknotesIcon,
+  members: UserGroupIcon,
+  loans: ClipboardDocumentListIcon,
 };
 
-export default async function CardWrapper() {
+export default async function CardWrapper({
+  numberOfMembers,
+  numberOfLoans,
+  totalLoanAmount,
+}: {
+  numberOfMembers: number;
+  numberOfLoans: number;
+  totalLoanAmount: number;
+}) {
   return (
     <>
-      {/* NOTE: Uncomment this code in Chapter 9 */}
-
-      {/* <Card title="Collected" value={totalPaidInvoices} type="collected" />
-      <Card title="Pending" value={totalPendingInvoices} type="pending" />
-      <Card title="Total Invoices" value={numberOfInvoices} type="invoices" />
-      <Card
-        title="Total Customers"
-        value={numberOfCustomers}
-        type="customers"
-      /> */}
+      <Card title="Total Members" value={numberOfMembers} type="members" />
+      <Card title="Total Loans" value={numberOfLoans} type="loans" />
+      <Card title="Loan Portfolio" value={`₦${totalLoanAmount.toLocaleString()}`} type="portfolio" />
     </>
   );
 }
@@ -37,7 +36,7 @@ export function Card({
 }: {
   title: string;
   value: number | string;
-  type: 'invoices' | 'customers' | 'pending' | 'collected';
+  type: 'members' | 'loans' | 'portfolio';
 }) {
   const Icon = iconMap[type];
 

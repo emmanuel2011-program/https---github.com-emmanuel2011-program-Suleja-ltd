@@ -1,7 +1,3 @@
-// This file contains type definitions for your data.
-// It describes the shape of the data, and what data type each property should accept.
-// For simplicity of teaching, we're manually defining these types.
-// However, these types are generated automatically if you're using an ORM such as Prisma.
 export type User = {
   id: string;
   name: string;
@@ -9,21 +5,54 @@ export type User = {
   password: string;
 };
 
-export type Customer = {
-  id: string;
-  name: string;
-  email: string;
-  image_url: string;
+export type MonthlyLoan = {
+  month: string;
+  loan_amount: number;
 };
 
-export type Invoice = {
+// Represents a Member of the Cooperative
+export type Membership = {
   id: string;
-  customer_id: string;
-  amount: number;
-  date: string;
-  // In TypeScript, this is called a string union type.
-  // It means that the "status" property can only be one of the two strings: 'pending' or 'paid'.
-  status: 'pending' | 'paid';
+  title: string;
+  firstName: string; // Changed to camelCase
+  surname: string;
+  email: string;
+  mobilePhone: string; // Changed to camelCase
+  gender: string;
+  dateOfBirth: string; // Changed to camelCase
+  nationality: string;
+  residentialAddress: string; // Changed to camelCase
+  tin: string | null;
+};
+
+// For the LatestLoans component on the Dashboard
+export type LatestLoan = {
+  id: string;
+  firstName: string; // Changed to camelCase
+  surname: string;
+  email: string;
+  loanAmount: number; // Changed to camelCase
+  requestDate: string; // Changed to camelCase
+};
+
+// Raw data from the database before formatting
+export type LatestLoanRaw = {
+  id: string;
+  firstName: string;
+  surname: string;
+  email: string;
+  loanAmount: number;
+};
+
+export type LoanApplication = {
+  id: string;
+  memberId: string; // Changed to camelCase
+  loanAmount: number; // Changed to camelCase
+  duration: string;
+  interest: string;
+  status: 'pending' | 'approved' | 'rejected' | 'paid';
+  requestDate: string; // Changed to camelCase
+  purposeOfLoan: string; // Added this
 };
 
 export type Revenue = {
@@ -31,30 +60,14 @@ export type Revenue = {
   revenue: number;
 };
 
-export type LatestInvoice = {
-  id: string;
-  name: string;
-  image_url: string;
-  email: string;
-  amount: string;
+// Summary Data for Dashboard Cards
+export type CardData = {
+  numberOfMembers: number;
+  numberOfLoans: number;
+  totalLoanAmount: number;
 };
 
-// The database returns a number for amount, but we later format it to a string with the formatCurrency function
-export type LatestInvoiceRaw = Omit<LatestInvoice, 'amount'> & {
-  amount: number;
-};
-
-export type InvoicesTable = {
-  id: string;
-  customer_id: string;
-  name: string;
-  email: string;
-  image_url: string;
-  date: string;
-  amount: number;
-  status: 'pending' | 'paid';
-};
-
+// Keep these to satisfy the leftover tutorial UI components
 export type CustomersTableType = {
   id: string;
   name: string;

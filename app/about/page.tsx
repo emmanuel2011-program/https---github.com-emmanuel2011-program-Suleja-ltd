@@ -1,6 +1,10 @@
 'use client';
-
+import SideNav from '@/app/ui/dashboard/sidenav';
 import Image from 'next/image';
+
+
+
+
 
 export default function AboutPage() {
   return (
