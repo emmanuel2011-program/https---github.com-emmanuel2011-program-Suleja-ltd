@@ -187,3 +187,16 @@ export async function createLoan(prevState: any, formData: FormData) {
     };
   }
 }
+export async function fetchAllMembers() {
+  try {
+    const data = await sql`
+      SELECT id, title, first_name, surname, email, mobile_phone, residential_address, nationality
+      FROM memberships
+      ORDER BY surname ASC`; // Sorted alphabetically
+
+    return data.rows;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch the membership directory.');
+  }
+}
