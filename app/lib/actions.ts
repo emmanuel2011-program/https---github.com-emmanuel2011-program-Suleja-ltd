@@ -1,10 +1,31 @@
 'use server';
-
+import { signIn } from '@/auth';
+import { AuthError } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
 
+
+
+export async function authenticate(
+  prevState: string | undefined,
+  formData: FormData,
+) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid credentials.';
+        default:
+          return 'Something went wrong.';
+      }
+    }
+    throw error;
+  }
+}
 // Initialize Resend with your API Key
 const resend = new Resend(process.env.RESEND_API_KEY as string);
 

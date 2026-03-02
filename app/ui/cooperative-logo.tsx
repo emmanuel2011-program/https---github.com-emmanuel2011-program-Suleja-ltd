@@ -1,14 +1,21 @@
 import { GlobeAltIcon } from '@heroicons/react/24/outline';
 import { lusitana } from '@/app/ui/fonts';
 
-export default function CooperativeLogo() {
+// Added { isDashboard } prop to control size
+export default function CooperativeLogo({ isDashboard = false }: { isDashboard?: boolean }) {
   return (
-    <div
-      className={`${lusitana.className} flex flex-row items-center leading-none`}
-    >
-      {/* Force the icon to have its own visible color */}
-      <GlobeAltIcon className="h-12 w-12 rotate-[15deg] text-green shrink-0" />
-      <p className="ml-2 text-[44px] text-green-700">SULEJA HHMCSOC</p>
+    <div className={`${lusitana.className} flex flex-row items-center leading-none`}>
+      <GlobeAltIcon 
+        className={`${
+          isDashboard ? 'h-8 w-8' : 'h-12 w-12' 
+        } rotate-[15deg] text-green-700 shrink-0`} 
+      />
+      
+      <p className={`ml-2 font-bold text-green-700 ${
+        isDashboard ? 'text-xl' : 'text-[44px]'
+      }`}>
+        SULEJA HHMCSOC
+      </p>
     </div>
   );
 }
