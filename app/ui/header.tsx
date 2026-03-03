@@ -62,7 +62,7 @@ export default function Header({ session }: { session: any }) {
               href="/login"
               className="ml-4 flex items-center gap-2 rounded-full bg-green-700 px-5 py-2 text-white hover:bg-green-800 shadow-sm transition-all active:scale-95"
             >
-              <span>Log in</span>
+              <span>Sign in</span>
               <ArrowRightOnRectangleIcon className="h-4 w-4" />
             </Link>
           )}
