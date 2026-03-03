@@ -110,12 +110,7 @@ export async function createLoan(prevState: any, formData: FormData) {
   const passportFile = formData.get('passportFile') as File;
   const idCardFile = formData.get('idCardFile') as File;
   // TEMPORARY TEST - Replace the string with your actual token
-const TEST_TOKEN = "vercel_blob_rw_IM7wO5HctNrK86vw_tdh9LfJUfZ25gpdbHsRoTWejlI3qvV";
 
-const passportBlob = await put(`passports/${passportFile.name}`, passportFile, {
-  access: 'public',
-  token: TEST_TOKEN, // Force the function to use this specific token
-});
 
   let passportUrl = null;
   let idCardUrl = null;
