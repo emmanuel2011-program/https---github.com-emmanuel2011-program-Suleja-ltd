@@ -78,8 +78,8 @@ async function seedLoanApplications() {
       middle_name VARCHAR(255),
       date_of_birth DATE NOT NULL,
       gender VARCHAR(50) NOT NULL,
-      nationality VARCHAR(100) NOT NULL,
-      residential_address TEXT NOT NULL,
+      nationality VARCHAR(100) DEFAULT 'Nigerian', -- Made safer
+      residential_address TEXT DEFAULT 'Not Provided', -- Made safer
       contact_address TEXT,
       tin VARCHAR(50),
       email VARCHAR(255) NOT NULL,
@@ -96,6 +96,7 @@ async function seedLoanApplications() {
       account_type VARCHAR(50) NOT NULL,
       passport_url TEXT,
       id_card_url TEXT,
+      status VARCHAR(50) DEFAULT 'pending', -- ADDED THIS
       spouse_name VARCHAR(255),
       spouse_mobile_phone VARCHAR(20),
       spouse_title VARCHAR(50),

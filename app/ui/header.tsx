@@ -30,7 +30,7 @@ export default function Header() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CooperativeLogo />
-          <span className="font-bold text-lg text-green-700">Suleja HH Cooperative</span>
+          <span className="font-bold text-lg text-green-700">Reg:19454</span>
         </div>
 
         {/* Hamburger button (visible on small screens) */}

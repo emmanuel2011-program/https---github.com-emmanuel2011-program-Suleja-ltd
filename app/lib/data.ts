@@ -153,3 +153,27 @@ export async function fetchMonthlyLoans() {
     return [];
   }
 }
+// ... existing imports and functions ...
+
+export async function fetchAllMembers() {
+  try {
+    const data = await sql`
+      SELECT 
+        id, 
+        title, 
+        first_name AS "firstName", 
+        surname, 
+        email, 
+        mobile_phone AS "mobilePhone", 
+        gender, 
+        nationality
+      FROM memberships
+      ORDER BY surname ASC`;
+
+    // With the 'postgres' library, 'data' is the array of results
+    return data as unknown as Membership[]; 
+  } catch (error) {
+    console.error('Database Error:', error);
+    return [];
+  }
+}
