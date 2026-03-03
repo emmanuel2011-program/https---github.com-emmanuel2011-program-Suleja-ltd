@@ -105,7 +105,7 @@ export default function Header({ session }: { session: any }) {
               onClick={() => setMenuOpen(false)}
               className="mt-2 flex items-center justify-center gap-2 rounded-md bg-green-700 px-4 py-3 text-white font-bold shadow-md"
             >
-              <span>Log in</span>
+              <span>Sign in</span>
               <ArrowRightOnRectangleIcon className="h-5 w-5" />
             </Link>
           )}
