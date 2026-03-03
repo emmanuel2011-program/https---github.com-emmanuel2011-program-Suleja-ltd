@@ -81,8 +81,9 @@ const initialFormState: FormState = {
   passportFile: null,
   idCardFile: null,
 };
+import { Membership } from '@/app/lib/definitions'; // Adjust path if needed
 
-export default function LoanApplicationForm() {
+export default function LoanApplicationForm({ members }: { members: Membership[] }) {
   const [step, setStep] = useState<number>(1);
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

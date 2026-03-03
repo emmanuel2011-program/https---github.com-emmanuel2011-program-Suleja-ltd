@@ -39,7 +39,7 @@ export default function LoansPage() {
       {/* Loan form (only visible after button click) */}
       {showForm && (
         <section className="mt-6">
-          <LoanForm />
+          <LoanForm members={[]} />
         </section>
       )}
     </main>
