@@ -1,12 +1,12 @@
 'use server';
+
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
 import { sql } from '@vercel/postgres';
+import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
-
-
 
 export async function authenticate(
   prevState: string | undefined,
@@ -26,13 +26,12 @@ export async function authenticate(
     throw error;
   }
 }
-// Initialize Resend with your API Key
+
 const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 /**
- * Action to create a new Membership with Welcome Email
+ * Action to create a new Membership
  */
-console.log('Resend Key Loaded:', process.env.RESEND_API_KEY?.slice(0, 5) + '...');
 export async function createMembership(formData: FormData) {
   const rawFormData = {
     surname: formData.get('surname') as string,
@@ -62,41 +61,25 @@ export async function createMembership(formData: FormData) {
       )
     `;
 
-    // TRIGGER WELCOME EMAIL
     try {
       await resend.emails.send({
-        from: 'Cooperative <onboarding@resend.dev>', // Update with your verified domain
+        from: 'Cooperative <onboarding@resend.dev>',
         to: [rawFormData.email],
         subject: 'Welcome to the Cooperative!',
-        html: `
-          <h1>Welcome, ${rawFormData.firstName}!</h1>
-          <p>Your membership registration was successful.</p>
-          <p><strong>Details:</strong></p>
-          <ul>
-            <li>Name: ${rawFormData.title} ${rawFormData.firstName} ${rawFormData.surname}</li>
-            <li>Phone: ${rawFormData.mobilePhone}</li>
-          </ul>
-          <p>We are glad to have you with us.</p>
-        `,
+        html: `<h1>Welcome, ${rawFormData.firstName}!</h1><p>Your registration was successful.</p>`,
       });
-    } catch (emailError) {
-      console.error('Membership Welcome Email Error:', emailError);
-    }
+    } catch (e) { console.error('Email error:', e); }
 
     revalidatePath('/membership');
     return { success: true };
-
   } catch (error: any) {
-    if (error.code === '23505') {
-      return { success: false, message: 'This email is already registered.' };
-    }
-    console.error('Database Error:', error);
-    return { success: false, message: 'Database Error: Failed to Create Membership.' };
+    if (error.code === '23505') return { success: false, message: 'Email already registered.' };
+    return { success: false, message: 'Database Error.' };
   }
 }
 
 /**
- * Action to create a Loan Application with Email Trigger
+ * Action to create a Loan Application with BLOB UPLOAD
  */
 export async function createLoan(prevState: any, formData: FormData) {
   const toNull = (val: string | null) => (val && val.trim() !== '' ? val : null);
@@ -110,7 +93,6 @@ export async function createLoan(prevState: any, formData: FormData) {
   const nationality = (formData.get('nationality') as string) || 'Nigerian';
   const title = (formData.get('title') as string) || 'Mr/Ms';
   const tin = toNull(formData.get('tin') as string);
-
   const loanAmount = formData.get('loanAmount') as string;
   const duration = formData.get('duration') as string;
   const interest = formData.get('interest') as string;
@@ -120,17 +102,36 @@ export async function createLoan(prevState: any, formData: FormData) {
   const accountType = (formData.get('accountType') as string) || 'Savings';
   const purposeOfLoan = formData.get('purposeOfLoan') as string;
   const repaymentDate = toNull(formData.get('repaymentDate') as string);
-
   const spouseName = toNull(formData.get('spouseName') as string);
   const spouseMobilePhone = toNull(formData.get('spouseMobilePhone') as string);
   const spouseDOB = toNull(formData.get('spouseDOB') as string);
 
-  const passportName = (formData.get('passportFile') as File)?.name || 'no-passport.jpg';
-  const idCardName = (formData.get('idCardFile') as File)?.name || 'no-id.jpg';
+  // --- START BLOB UPLOAD LOGIC ---
+  const passportFile = formData.get('passportFile') as File;
+  const idCardFile = formData.get('idCardFile') as File;
+
+  let passportUrl = null;
+  let idCardUrl = null;
 
   try {
-    const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
+    // Upload Passport
+    if (passportFile && passportFile.size > 0) {
+      const passportBlob = await put(`passports/${Date.now()}-${passportFile.name}`, passportFile, {
+        access: 'public',
+      });
+      passportUrl = passportBlob.url;
+    }
 
+    // Upload ID Card
+    if (idCardFile && idCardFile.size > 0) {
+      const idBlob = await put(`ids/${Date.now()}-${idCardFile.name}`, idCardFile, {
+        access: 'public',
+      });
+      idCardUrl = idBlob.url;
+    }
+
+    // Check Membership
+    const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
     let memberId;
     if (existingMember.rows.length > 0) {
       memberId = existingMember.rows[0].id;
@@ -143,6 +144,7 @@ export async function createLoan(prevState: any, formData: FormData) {
       memberId = newMember.rows[0].id;
     }
 
+    // Insert Loan Application with URLs
     await sql`
       INSERT INTO loan_applications (
         member_id, surname, first_name, email, mobile_phone, date_of_birth,
@@ -156,43 +158,38 @@ export async function createLoan(prevState: any, formData: FormData) {
         ${tin}, ${parseFloat(loanAmount)}, ${duration}, ${interest}, ${bankName}, ${accountNumber}, 
         ${accountName}, ${accountType}, ${purposeOfLoan}, ${repaymentDate},
         ${spouseName}, ${spouseMobilePhone}, ${spouseDOB},
-        ${passportName}, ${idCardName}, 'pending', CURRENT_DATE, ${gender}
+        ${passportUrl}, ${idCardUrl}, 'pending', CURRENT_DATE, ${gender}
       )
     `;
 
-    // TRIGGER LOAN EMAIL NOTIFICATION
+    // Email Notification
     try {
       await resend.emails.send({
         from: 'Cooperative <onboarding@resend.dev>',
         to: [email],
         subject: 'Loan Application Received',
-        react: LoanConfirmationEmail({ 
-          firstName, 
-          loanAmount: loanAmount.toString(), 
-          duration 
-        }),
+        react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
       });
-    } catch (emailError) {
-      console.error('Loan Email Notification Error:', emailError);
-    }
+    } catch (e) { console.error('Email error:', e); }
 
-    revalidatePath('/loans');
-    return { success: true, message: 'Loan application submitted successfully!' };
+    revalidatePath('/dashboard/loans');
+    return { success: true, message: 'Application submitted successfully!' };
 
   } catch (error: any) {
-    console.error('Database Error:', error);
-    return { 
-      success: false, 
-      message: `Database Error: ${error.message || 'Failed to process loan.'}` 
-    };
+    console.error('Process Error:', error);
+    return { success: false, message: `Error: ${error.message}` };
   }
 }
+
+/**
+ * Fetch Members including their ID URLs
+ */
 export async function fetchAllMembers() {
   try {
     const data = await sql`
-      SELECT id, title, first_name, surname, email, mobile_phone, residential_address, nationality
+      SELECT id, title, first_name, surname, email, mobile_phone, residential_address, nationality, passport_url, id_card_url
       FROM memberships
-      ORDER BY surname ASC`; // Sorted alphabetically
+      ORDER BY surname ASC`;
 
     return data.rows;
   } catch (error) {
