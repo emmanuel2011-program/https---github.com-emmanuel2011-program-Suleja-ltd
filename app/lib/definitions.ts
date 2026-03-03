@@ -23,6 +23,9 @@ export type Membership = {
   nationality: string;
   residentialAddress: string; // Changed to camelCase
   tin: string | null;
+  // --- ADDED FOR DOCUMENT STORAGE ---
+  passportUrl?: string; // The URL for the uploaded passport photo
+  idCardUrl?: string;   // The URL for the uploaded ID card
 };
 
 // For the LatestLoans component on the Dashboard
