@@ -1,3 +1,5 @@
+'use server';
+
 import bcrypt from 'bcrypt';
 import postgres from 'postgres';
 import { memberships, loanApplications, users } from '../lib/cooperative-data';
@@ -78,13 +80,13 @@ async function seedLoanApplications() {
       middle_name VARCHAR(255),
       date_of_birth DATE NOT NULL,
       gender VARCHAR(50) NOT NULL,
-      nationality VARCHAR(100) DEFAULT 'Nigerian', -- Made safer
-      residential_address TEXT DEFAULT 'Not Provided', -- Made safer
+      nationality VARCHAR(100) DEFAULT 'Nigerian',
+      residential_address TEXT DEFAULT 'Not Provided',
       contact_address TEXT,
       tin VARCHAR(50),
       email VARCHAR(255) NOT NULL,
       mobile_phone VARCHAR(20) NOT NULL,
-      loan_amount INT NOT NULL,
+      loan_amount DECIMAL(12,2) NOT NULL, -- Changed to DECIMAL for accuracy
       request_date DATE NOT NULL,
       duration VARCHAR(50) NOT NULL,
       interest VARCHAR(20) NOT NULL,
@@ -96,7 +98,7 @@ async function seedLoanApplications() {
       account_type VARCHAR(50) NOT NULL,
       passport_url TEXT,
       id_card_url TEXT,
-      status VARCHAR(50) DEFAULT 'pending', -- ADDED THIS
+      status VARCHAR(50) DEFAULT 'pending',
       spouse_name VARCHAR(255),
       spouse_mobile_phone VARCHAR(20),
       spouse_title VARCHAR(50),
@@ -104,7 +106,7 @@ async function seedLoanApplications() {
       spouse_gender VARCHAR(50),
       spouse_nationality VARCHAR(100),
       spouse_state_of_origin VARCHAR(100),
-      spouse_local_govt VARCHAR(100),
+      spouse_lga VARCHAR(100), -- Updated name to match action
       spouse_marital_status VARCHAR(50),
       spouse_residential_address TEXT,
       FOREIGN KEY (member_id) REFERENCES memberships(id)
@@ -121,7 +123,7 @@ async function seedLoanApplications() {
           account_number, account_name, account_type,
           passport_url, id_card_url,
           spouse_name, spouse_mobile_phone, spouse_title, spouse_dob, spouse_gender,
-          spouse_nationality, spouse_state_of_origin, spouse_local_govt, spouse_marital_status,
+          spouse_nationality, spouse_state_of_origin, spouse_lga, spouse_marital_status,
           spouse_residential_address
         )
         VALUES (
@@ -135,7 +137,7 @@ async function seedLoanApplications() {
           ${loan.spouseName || null}, ${loan.spouseMobilePhone || null}, ${loan.spouseTitle || null}, 
           ${loan.spouseDOB || null}, ${loan.spouseGender || null},
           ${loan.spouseNationality || null}, ${loan.spouseStateOfOrigin || null}, 
-          ${loan.spouseLocalGovt || null}, ${loan.spouseMaritalStatus || null},
+          ${loan.spouseLGA || null}, ${loan.spouseMaritalStatus || null},
           ${loan.spouseResidentialAddress || null}
         )
         ON CONFLICT (id) DO NOTHING;
@@ -150,7 +152,7 @@ export async function GET() {
   try {
     await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
 
-    // Dropping tables to apply the new schema (purpose_of_loan)
+    // CAUTION: This wipes all data!
     await sql`DROP TABLE IF EXISTS loan_applications CASCADE`;
     await sql`DROP TABLE IF EXISTS memberships CASCADE`;
     await sql`DROP TABLE IF EXISTS users CASCADE`;
@@ -159,7 +161,7 @@ export async function GET() {
     await seedMemberships();
     await seedLoanApplications();
 
-    return Response.json({ message: 'Database wiped and re-seeded successfully' });
+    return Response.json({ message: 'Database wiped and re-seeded successfully with all spouse fields' });
   } catch (error: any) {
     console.error("Seeding failed:", error);
     return Response.json({ error: error.message }, { status: 500 });
