@@ -8,9 +8,10 @@ import {
   Bars3Icon, 
   XMarkIcon, 
   ArrowRightOnRectangleIcon, 
-  ArrowLeftOnRectangleIcon 
+  ArrowLeftOnRectangleIcon,
+  EnvelopeIcon // Added for messages
 } from '@heroicons/react/24/outline';
-import { signOut } from 'next-auth/react'; // Import for client-side logout
+import { signOut } from 'next-auth/react';
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -28,9 +29,12 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   );
 }
 
-// Notice we added { session } as a prop here
-export default function Header({ session }: { session: any }) {
+// We pass pendingCount as a prop from the Server Layout
+export default function Header({ session, pendingCount = 0 }: { session: any; pendingCount?: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  
+  // Replace this email with your actual admin email
+  const isAdmin = session?.user?.email === 'admin@coop.org';
 
   return (
     <header className="bg-green-50 shadow px-6 py-4 sticky top-0 z-50">
@@ -47,8 +51,23 @@ export default function Header({ session }: { session: any }) {
           <NavLink href="/membership">Memberships</NavLink>
           <NavLink href="/loans">Loans</NavLink>
           <NavLink href="/contact">Contact</NavLink>
+
+          {/* ADMIN MESSAGES ICON */}
+          {isAdmin && (
+            <Link 
+              href="/dashboard/loans" 
+              className="relative p-2 text-green-700 hover:bg-green-100 rounded-full transition-colors"
+            >
+              <EnvelopeIcon className="h-6 w-6" />
+              {pendingCount > 0 && (
+                <span className="absolute top-0 right-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white ring-2 ring-green-50">
+                  {pendingCount}
+                </span>
+              )}
+            </Link>
+          )}
           
-          {/* AUTH TOGGLE (Desktop) */}
+          {/* AUTH TOGGLE */}
           {session ? (
             <button
               onClick={() => signOut({ callbackUrl: '/' })}
@@ -68,20 +87,16 @@ export default function Header({ session }: { session: any }) {
           )}
         </nav>
 
-        {/* Hamburger button (visible on small screens) */}
+        {/* Hamburger button */}
         <button
           className="md:hidden p-2 text-green-700"
           onClick={() => setMenuOpen(!menuOpen)}
         >
-          {menuOpen ? (
-            <XMarkIcon className="h-6 w-6" />
-          ) : (
-            <Bars3Icon className="h-6 w-6" />
-          )}
+          {menuOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}
         </button>
       </div>
 
-      {/* Mobile nav (toggle open/closed) */}
+      {/* Mobile nav */}
       {menuOpen && (
         <nav className="mt-4 flex flex-col gap-2 md:hidden text-sm font-medium border-t border-green-100 pt-4">
           <NavLink href="/">Home</NavLink>
@@ -90,7 +105,16 @@ export default function Header({ session }: { session: any }) {
           <NavLink href="/loans">Loans</NavLink>
           <NavLink href="/contact">Contact</NavLink>
           
-          {/* AUTH TOGGLE (Mobile) */}
+          {isAdmin && (
+            <Link 
+              href="/dashboard/loans" 
+              className="flex items-center justify-between px-3 py-3 rounded-md bg-green-100 text-green-800"
+            >
+              <span className="font-bold">Pending Applications</span>
+              <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-xs">{pendingCount}</span>
+            </Link>
+          )}
+
           {session ? (
             <button
               onClick={() => signOut({ callbackUrl: '/', redirect: true })}

@@ -269,3 +269,11 @@ export async function fetchAllMembers() {
     throw new Error('Failed to fetch the membership directory.');
   }
 }
+export async function getPendingCount() {
+  try {
+    const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
+    return Number(data.rows[0].count);
+  } catch (error) {
+    return 0;
+  }
+}
