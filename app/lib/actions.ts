@@ -7,8 +7,12 @@ import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
+// Import your new status template
+import { LoanStatusEmail } from '@/app/ui/emails/loan-status'; 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+// Set your admin email for monitoring
+const ADMIN_EMAIL = 'admin@shhmcsoc.me'; 
 
 /**
  * Action to handle User Login
@@ -64,7 +68,6 @@ export async function createMembership(formData: FormData) {
       )
     `;
 
-    // SEND WELCOME EMAIL
     if (process.env.RESEND_API_KEY) {
       try {
         await resend.emails.send({
@@ -89,12 +92,11 @@ export async function createMembership(formData: FormData) {
 }
 
 /**
- * Action to create a Loan Application with BLOB UPLOAD
+ * Action to create a Loan Application
  */
 export async function createLoan(prevState: any, formData: FormData) {
   const toNull = (val: string | null) => (val && val.trim() !== '' ? val : null);
 
-  // 1. DATA EXTRACTION
   const email = formData.get('email') as string;
   const firstName = formData.get('firstName') as string;
   const surname = formData.get('surname') as string;
@@ -122,7 +124,6 @@ export async function createLoan(prevState: any, formData: FormData) {
       repaymentDate = fallback.toISOString().split('T')[0];
   }
 
-  // SPOUSE DATA
   const spouseTitle = toNull(formData.get('spouseTitle') as string);
   const spouseName = toNull(formData.get('spouseName') as string);
   const spouseMobilePhone = toNull(formData.get('spouseMobilePhone') as string);
@@ -134,7 +135,6 @@ export async function createLoan(prevState: any, formData: FormData) {
   const spouseResidentialAddress = toNull(formData.get('spouseResidentialAddress') as string);
 
   try {
-    // 2. FILE UPLOADS
     let passportUrl = null;
     let idCardUrl = null;
 
@@ -151,7 +151,6 @@ export async function createLoan(prevState: any, formData: FormData) {
       idCardUrl = idBlob.url;
     }
 
-    // 3. MEMBER HANDLING (Check or Create)
     const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
     let memberId;
     
@@ -166,7 +165,6 @@ export async function createLoan(prevState: any, formData: FormData) {
       memberId = newMember.rows[0].id;
     }
 
-    // 4. DATABASE INSERT
     await sql`
       INSERT INTO loan_applications (
         member_id, surname, first_name, email, mobile_phone, date_of_birth,
@@ -186,25 +184,22 @@ export async function createLoan(prevState: any, formData: FormData) {
       )
     `;
 
-    // 5. EMAIL NOTIFICATION (Awaited)
     if (process.env.RESEND_API_KEY) {
       try {
-        const { data, error } = await resend.emails.send({
+        await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [email],
           subject: 'Loan Application Received',
           text: `Hello ${firstName}, your loan application for ₦${loanAmount} has been received.`,
           react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
         });
-
-        if (error) console.error('Resend Error:', error);
-        else console.log('Loan Email sent successfully:', data?.id);
       } catch (emailError) {
         console.error('Email Render/Send failure:', emailError);
       }
     }
 
     revalidatePath('/dashboard/loans');
+    revalidatePath('/'); 
     return { success: true, message: 'Application submitted successfully!' };
 
   } catch (error: any) {
@@ -212,47 +207,63 @@ export async function createLoan(prevState: any, formData: FormData) {
     return { success: false, message: `System Error: ${error.message}` };
   }
 }
+
 /**
  * Action to Approve or Reject a Loan
  */
-export async function updateLoanStatus(loanId: string, newStatus: 'approved' | 'rejected', applicantEmail: string, firstName: string) {
+/**
+ * Action to Approve or Reject a Loan
+ */
+export async function updateLoanStatus(
+  loanId: string, 
+  newStatus: 'approved' | 'rejected', 
+  applicantEmail: string, 
+  firstName: string
+) {
   try {
+    // 1. Fetch the specific loan details first for the email
+    const loanQuery = await sql`
+      SELECT loan_amount, repayment_date FROM loan_applications WHERE id = ${loanId}
+    `;
+    const loanDetails = loanQuery.rows[0];
+
+    // 2. Update Database Status
     await sql`
       UPDATE loan_applications 
       SET status = ${newStatus} 
       WHERE id = ${loanId}
     `;
 
-    // Send Approval/Rejection Email
+    // 3. Send Status Update Email
     if (process.env.RESEND_API_KEY) {
-      await resend.emails.send({
-        from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
-        to: [applicantEmail],
-        subject: `Update on your Loan Application: ${newStatus.toUpperCase()}`,
-        html: `
-          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h2 style="color: ${newStatus === 'approved' ? '#166534' : '#991b1b'};">
-              Loan ${newStatus === 'approved' ? 'Approved!' : 'Application Update'}
-            </h2>
-            <p>Hello ${firstName},</p>
-            <p>Your loan application has been <strong>${newStatus}</strong>.</p>
-            ${newStatus === 'approved' 
-              ? '<p>The funds will be disbursed to your provided bank account shortly.</p>' 
-              : '<p>Please contact the cooperative office for further details regarding this decision.</p>'}
-            <p>Best regards,<br/>SulejaHH Management</p>
-          </div>
-        `,
-      });
+      try {
+        await resend.emails.send({
+          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+          to: [applicantEmail],
+          cc: [ADMIN_EMAIL],
+          subject: `Loan Application Status: ${newStatus.toUpperCase()}`,
+          react: LoanStatusEmail({ 
+            firstName, 
+            status: newStatus,
+            amount: loanDetails?.loan_amount,
+            repaymentDate: loanDetails?.repayment_date
+          }), 
+        });
+        console.log(`Email details: Amount ₦${loanDetails?.loan_amount} sent to ${applicantEmail}`);
+      } catch (emailErr) {
+        console.error('Email sending failed:', emailErr);
+      }
     }
 
     revalidatePath('/dashboard/loans');
+    revalidatePath('/'); 
+    
     return { success: true };
   } catch (error) {
     console.error('Failed to update status:', error);
     return { success: false, message: 'Failed to update status.' };
   }
 }
-
 /**
  * Fetch Members for Admin Directory
  */
@@ -269,11 +280,32 @@ export async function fetchAllMembers() {
     throw new Error('Failed to fetch the membership directory.');
   }
 }
+
+/**
+ * Fetch count of pending loans
+ */
 export async function getPendingCount() {
   try {
     const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
     return Number(data.rows[0].count);
   } catch (error) {
+    console.error('Error fetching pending count:', error);
     return 0;
+  }
+}
+
+/**
+ * Fetch pending loans for client action
+ */
+export async function getPendingLoansAction() {
+  try {
+    const { rows } = await sql`
+      SELECT * FROM loan_applications 
+      WHERE status = 'pending' 
+      ORDER BY request_date DESC`;
+    return rows;
+  } catch (error) {
+    console.error('Failed to fetch loans:', error);
+    return [];
   }
 }

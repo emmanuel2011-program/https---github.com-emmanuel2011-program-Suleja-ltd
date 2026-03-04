@@ -1,22 +1,52 @@
-import { sql } from '@vercel/postgres';
-import { updateLoanStatus } from '@/app/lib/actions';
+'use client';
+
+import { useState, useEffect } from 'react';
+import { updateLoanStatus, getPendingLoansAction } from '@/app/lib/actions';
+import { toast } from 'sonner';
 import { 
   CheckIcon, 
   XMarkIcon, 
   EyeIcon,
-  BanknotesIcon 
+  BanknotesIcon,
+  InboxIcon
 } from '@heroicons/react/24/outline';
 
-async function getPendingLoans() {
-  const { rows } = await sql`
-    SELECT * FROM loan_applications 
-    WHERE status = 'pending' 
-    ORDER BY request_date DESC`;
-  return rows;
-}
+export default function AdminLoansPage() {
+  const [loans, setLoans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function AdminLoansPage() {
-  const loans = await getPendingLoans();
+  // Initial fetch of pending loans
+  useEffect(() => {
+    async function loadLoans() {
+      const data = await getPendingLoansAction();
+      setLoans(data);
+      setLoading(false);
+    }
+    loadLoans();
+  }, []);
+
+  const handleStatusUpdate = async (loan: any, status: 'approved' | 'rejected') => {
+    const promise = updateLoanStatus(loan.id, status, loan.email, loan.first_name);
+
+    toast.promise(promise, {
+      loading: `Processing ${status} for ${loan.first_name}...`,
+      success: () => {
+        // Remove the loan from the local state so the UI updates instantly
+        setLoans((prev) => prev.filter((l) => l.id !== loan.id));
+        return `Loan for ${loan.first_name} has been ${status}!`;
+      },
+      error: (err) => `Error: ${err.message || 'Could not update status'}`,
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+        <InboxIcon className="h-12 w-12 text-gray-300" />
+        <p className="mt-4 text-gray-500">Loading applications...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -56,12 +86,12 @@ export default async function AdminLoansPage() {
               {/* Document Links */}
               <div className="flex items-center gap-3 border-l border-r px-6">
                 {loan.passport_url && (
-                  <a href={loan.passport_url} target="_blank" className="flex flex-col items-center text-xs text-blue-600 hover:underline">
+                  <a href={loan.passport_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center text-xs text-blue-600 hover:underline">
                     <EyeIcon className="h-5 w-5" /> Passport
                   </a>
                 )}
                 {loan.id_card_url && (
-                  <a href={loan.id_card_url} target="_blank" className="flex flex-col items-center text-xs text-blue-600 hover:underline">
+                  <a href={loan.id_card_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center text-xs text-blue-600 hover:underline">
                     <EyeIcon className="h-5 w-5" /> ID Card
                   </a>
                 )}
@@ -69,23 +99,19 @@ export default async function AdminLoansPage() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                <form action={async () => {
-                  'use server';
-                  await updateLoanStatus(loan.id, 'approved', loan.email, loan.first_name);
-                }}>
-                  <button className="flex items-center gap-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                    <CheckIcon className="h-4 w-4" /> Approve
-                  </button>
-                </form>
+                <button 
+                  onClick={() => handleStatusUpdate(loan, 'approved')}
+                  className="flex items-center gap-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                >
+                  <CheckIcon className="h-4 w-4" /> Approve
+                </button>
 
-                <form action={async () => {
-                  'use server';
-                  await updateLoanStatus(loan.id, 'rejected', loan.email, loan.first_name);
-                }}>
-                  <button className="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors">
-                    <XMarkIcon className="h-4 w-4" /> Reject
-                  </button>
-                </form>
+                <button 
+                  onClick={() => handleStatusUpdate(loan, 'rejected')}
+                  className="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors shadow-sm"
+                >
+                  <XMarkIcon className="h-4 w-4" /> Reject
+                </button>
               </div>
 
             </div>
