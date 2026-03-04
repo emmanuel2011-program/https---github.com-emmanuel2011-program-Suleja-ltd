@@ -63,7 +63,7 @@ export async function createMembership(formData: FormData) {
 
     try {
       await resend.emails.send({
-        from: 'Cooperative <onboarding@resend.dev>',
+        from: 'SulejaHH Cooperative <info@send.shhmcsoc.me>',
         to: [rawFormData.email],
         subject: 'Welcome to the Cooperative!',
         html: `<h1>Welcome, ${rawFormData.firstName}!</h1><p>Your registration was successful.</p>`,
@@ -167,7 +167,7 @@ export async function createLoan(prevState: any, formData: FormData) {
     // Email Notification
     try {
       await resend.emails.send({
-        from: 'Cooperative <onboarding@resend.dev>',
+        from: 'SulejaHH Cooperative <info@send.shhmcsoc.me>',
         to: [email],
         subject: 'Loan Application Received',
         react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
