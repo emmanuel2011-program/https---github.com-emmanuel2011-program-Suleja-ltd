@@ -36,8 +36,8 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   
-  const isAdmin = session?.user?.email === 'admin@shhmcsoc.me' || session?.user?.email === 'info@shhmcsoc.me';
-
+  const isAdmin = session?.user?.email?.toLowerCase() === 'admin@shhmcsoc.me' || 
+                session?.user?.email?.toLowerCase() === 'info@shhmcsoc.me';
   return (
     <header className="bg-green-50 shadow-sm px-6 py-4 sticky top-0 z-50 border-b border-green-100">
       <div className="max-w-7xl mx-auto flex items-center justify-between">

@@ -9,7 +9,7 @@ import {
   PhotoIcon,
   BanknotesIcon,
   HeartIcon,
-  EnvelopeIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
 import { createLoan } from '@/app/lib/actions';
@@ -48,7 +48,6 @@ async function compressImage(file: File): Promise<Blob | File> {
   });
 }
 
-// Loading Spinner Component
 const Spinner = () => (
   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -70,6 +69,7 @@ type FormState = {
   dateOfBirth: string;
   purposeOfLoan: string;
   loanAmount: string;
+  requestedDate: string; // New field
   duration: string;
   interest: string;
   bankName: string;
@@ -81,7 +81,7 @@ type FormState = {
   spouseDOB: string;
   spouseGender: string;
   spouseNationality: string;
-  spouseStateOfOrigin: string; // Matches server action variable
+  spouseStateOfOrigin: string;
   spouseLGA: string;
   spouseMaritalStatus: string;
   spouseTitle: string;
@@ -103,6 +103,7 @@ const initialFormState: FormState = {
   tin: '',
   purposeOfLoan: '',
   loanAmount: '',
+  requestedDate: '', // New field
   duration: '1 Month',
   interest: '15% Monthly',
   bankName: '',
@@ -148,6 +149,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
     }
     if (step === 2) {
       if (!form.loanAmount || Number(form.loanAmount) <= 0) return "Please enter a valid loan amount.";
+      if (!form.requestedDate) return "Please select the requested date.";
       if (!form.purposeOfLoan.trim()) return "Please state the purpose of the loan.";
     }
     if (step === 3) {
@@ -172,20 +174,16 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
 
     try {
       const formData = new FormData();
-      
-      // 1. Append basic fields
       Object.entries(form).forEach(([key, value]) => {
         if (value !== null && !(value instanceof File)) {
           formData.append(key, value.toString());
         }
       });
 
-      // 2. Append calculated Repayment Date
       const repDate = new Date();
       repDate.setDate(repDate.getDate() + 30);
       formData.append('repaymentDate', repDate.toISOString().split('T')[0]);
 
-      // 3. Compress and Append Files
       if (form.passportFile) {
         const compressed = await compressImage(form.passportFile);
         formData.append('passportFile', compressed, 'passport.jpg');
@@ -195,9 +193,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
         formData.append('idCardFile', compressed, 'idcard.jpg');
       }
 
-      // 4. Call Server Action
       const response = await createLoan(null, formData); 
-      
       if (response?.success) {
         setSubmitted(true);
       } else {
@@ -205,9 +201,8 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       }
     } catch (err) {
       console.error("Submission Error:", err);
-      alert("An unexpected error occurred. Please check your internet connection and try again.");
+      alert("An error occurred. Please check your connection and try again.");
     } finally {
-      // Always stop the spinner, even on error
       setIsLoading(false);
     }
   }
@@ -216,59 +211,80 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
     switch (step) {
       case 1:
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <UserCircleIcon className="h-5 w-5 text-green-600" /> Personal Information
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="text" placeholder="First Name *" value={form.firstName} onChange={e => update('firstName', e.target.value)} className="rounded-md border p-2 text-sm outline-none" required />
-              <input type="text" placeholder="Surname *" value={form.surname} onChange={e => update('surname', e.target.value)} className="rounded-md border p-2 text-sm outline-none" required />
+              <input type="text" placeholder="First Name *" value={form.firstName} onChange={e => update('firstName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              <input type="text" placeholder="Surname *" value={form.surname} onChange={e => update('surname', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              
               <select value={form.gender} onChange={e => update('gender', e.target.value)} className="rounded-md border p-2 text-sm bg-white" required>
                 <option value="">Select Gender *</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-              <input type="email" placeholder="Email Address *" value={form.email} onChange={e => update('email', e.target.value)} className="rounded-md border p-2 text-sm outline-none" required />
-              <input type="tel" placeholder="Mobile Phone (11 digits) *" value={form.mobilePhone} onChange={e => update('mobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none" required />
-              <input type="date" value={form.dateOfBirth} onChange={e => update('dateOfBirth', e.target.value)} className="rounded-md border p-2 text-sm outline-none" required />
+
+              <input type="email" placeholder="Email Address *" value={form.email} onChange={e => update('email', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              
+              <input type="tel" placeholder="Mobile Phone (11 digits) *" value={form.mobilePhone} onChange={e => update('mobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              
+              <input type="text" placeholder="TIN (Tax Identification Number)" value={form.tin} onChange={e => update('tin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Date of Birth *</label>
+                <input type="date" value={form.dateOfBirth} onChange={e => update('dateOfBirth', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              </div>
+
               <div className="md:col-span-2">
-                <textarea placeholder="Full Residential Address *" value={form.residentialAddress} onChange={e => update('residentialAddress', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" rows={2} required />
+                <textarea placeholder="Full Residential Address *" value={form.residentialAddress} onChange={e => update('residentialAddress', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" rows={2} required />
               </div>
             </div>
           </div>
         );
       case 2:
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <CurrencyDollarIcon className="h-5 w-5 text-green-600" /> Loan Details
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div className="md:col-span-2">
-                  <label className="text-sm font-medium">Requested Amount (₦) *</label>
-                  <input type="number" value={form.loanAmount} onChange={e => update('loanAmount', e.target.value)} className="w-full rounded-md border p-2 text-sm" required />
+               <div className="md:col-span-1">
+                  <label className="text-sm font-medium mb-1 block">Requested Amount (₦) *</label>
+                  <input type="number" value={form.loanAmount} onChange={e => update('loanAmount', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
                </div>
-               <select value={form.duration} onChange={e => update('duration', e.target.value)} className="w-full rounded-md border bg-white p-2 text-sm font-semibold text-gray-700 outline-none">
-                <option value="1 Month">1 Month</option>
-                <option value="2 Months">2 Months</option>
-               </select>
-               <input type="text" value={form.interest} readOnly className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-gray-500" />
+               {/* NEW REQUESTED DATE FIELD */}
+               <div className="md:col-span-1 flex flex-col gap-1">
+                  <label className="text-sm font-medium mb-1 block">Requested Date *</label>
+                  <input type="date" value={form.requestedDate} onChange={e => update('requestedDate', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+               </div>
+               <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Repayment Duration</label>
+                <select value={form.duration} onChange={e => update('duration', e.target.value)} className="w-full rounded-md border bg-white p-2 text-sm font-semibold text-gray-700 outline-none">
+                  <option value="1 Month">1 Month</option>
+                  <option value="2 Months">2 Months</option>
+                </select>
+               </div>
+               <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Interest Rate</label>
+                <input type="text" value={form.interest} readOnly className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-gray-500" />
+               </div>
                <div className="md:col-span-2">
-                <textarea placeholder="Purpose of Loan *" value={form.purposeOfLoan} onChange={e => update('purposeOfLoan', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm" required />
+                <textarea placeholder="Purpose of Loan *" value={form.purposeOfLoan} onChange={e => update('purposeOfLoan', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               </div>
             </div>
           </div>
         );
       case 3:
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <BanknotesIcon className="h-5 w-5 text-green-600" /> Crediting Bank
             </h2>
-            <input type="text" placeholder="Bank Name *" value={form.bankName} onChange={e => update('bankName', e.target.value)} className="w-full rounded-md border p-2 text-sm" required />
-            <input type="text" placeholder="Account Number *" value={form.accountNumber} onChange={e => update('accountNumber', e.target.value)} className="w-full rounded-md border p-2 text-sm" required />
-            <input type="text" placeholder="Account Name *" value={form.accountName} onChange={e => update('accountName', e.target.value)} className="w-full rounded-md border p-2 text-sm" required />
-            <select value={form.accountType} onChange={e => update('accountType', e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white">
+            <input type="text" placeholder="Bank Name *" value={form.bankName} onChange={e => update('bankName', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" required />
+            <input type="text" placeholder="Account Number *" value={form.accountNumber} onChange={e => update('accountNumber', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" required />
+            <input type="text" placeholder="Account Name *" value={form.accountName} onChange={e => update('accountName', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" required />
+            <select value={form.accountType} onChange={e => update('accountType', e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white outline-none">
               <option value="Savings">Savings</option>
               <option value="Current">Current</option>
             </select>
@@ -276,7 +292,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
         );
       case 4:
         return (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <PhotoIcon className="h-5 w-5 text-green-600" /> Required Documents
             </h2>
@@ -292,46 +308,49 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
         );
       case 5:
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <HeartIcon className="h-5 w-5 text-green-600" /> Next of Kin / Spouse Information
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select value={form.spouseTitle} onChange={e => update('spouseTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white">
+              <select value={form.spouseTitle} onChange={e => update('spouseTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none">
                 <option value="">Select Title</option>
                 <option value="Mr">Mr</option>
                 <option value="Mrs">Mrs</option>
                 <option value="Miss">Miss</option>
               </select>
-              <input type="text" placeholder="Spouse Full Name" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm" />
-              <div>
+              <input type="text" placeholder="Spouse Full Name" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
+              
+              <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Spouse Date of Birth</label>
-                <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm" />
+                <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" />
               </div>
-              <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white">
+
+              <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none">
                 <option value="">Spouse Gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-              <input type="tel" placeholder="Spouse Phone" value={form.spouseMobilePhone} onChange={e => update('spouseMobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm" />
-              <input type="text" placeholder="Spouse Nationality" value={form.spouseNationality} onChange={e => update('spouseNationality', e.target.value)} className="rounded-md border p-2 text-sm" />
-              <input type="text" placeholder="State of Origin" value={form.spouseStateOfOrigin} onChange={e => update('spouseStateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm" />
-              <input type="text" placeholder="LGA" value={form.spouseLGA} onChange={e => update('spouseLGA', e.target.value)} className="rounded-md border p-2 text-sm" />
+              <input type="tel" placeholder="Spouse Phone" value={form.spouseMobilePhone} onChange={e => update('spouseMobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none" />
+              <input type="text" placeholder="Spouse Nationality" value={form.spouseNationality} onChange={e => update('spouseNationality', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
+              <input type="text" placeholder="State of Origin" value={form.spouseStateOfOrigin} onChange={e => update('spouseStateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
+              <input type="text" placeholder="LGA" value={form.spouseLGA} onChange={e => update('spouseLGA', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
               <div className="md:col-span-2">
-                <textarea placeholder="Spouse Residential Address" value={form.spouseResidentialAddress} onChange={e => update('spouseResidentialAddress', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm" />
+                <textarea placeholder="Spouse Residential Address" value={form.spouseResidentialAddress} onChange={e => update('spouseResidentialAddress', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none" />
               </div>
             </div>
           </div>
         );
       case 6:
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold text-gray-800">Final Review</h2>
             <div className="bg-white p-4 rounded-md shadow-sm text-sm space-y-3 border border-gray-200">
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Applicant:</span> <span>{form.firstName} {form.surname}</span></div>
-              <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Amount:</span> <span className="font-bold">₦{form.loanAmount}</span></div>
+              <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Amount:</span> <span className="font-bold text-green-700">₦{Number(form.loanAmount).toLocaleString()}</span></div>
+              <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Date Requested:</span> <span>{form.requestedDate}</span></div>
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Duration:</span> <span>{form.duration}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Documents:</span> <span className="text-green-600 font-medium">Attached & Compressed</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Documents:</span> <span className="text-green-600 font-medium">Ready for Upload</span></div>
             </div>
           </div>
         );
@@ -340,54 +359,71 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
   }
 
   return (
-    <div className="relative max-w-2xl mx-auto rounded-xl bg-gray-50 p-6 border border-gray-200 shadow-xl mt-10">
+    <div className="relative max-w-2xl mx-auto rounded-xl bg-gray-50 p-6 border border-gray-200 shadow-xl mt-10 mb-20">
       {isLoading && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm rounded-xl">
-          <div className="bg-white p-6 rounded-lg shadow-xl border flex flex-col items-center gap-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl border border-green-100 flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
             <p className="text-sm font-bold text-gray-700">Processing & Uploading...</p>
-            <p className="text-[10px] text-gray-400 text-center px-4">Sending your application to the cooperative. This may take a few seconds.</p>
+            <p className="text-[10px] text-gray-400 text-center px-4">Compressing images and sending to the cooperative. Please wait.</p>
           </div>
         </div>
       )}
 
       {submitted ? (
-        <div className="text-center py-10">
+        <div className="text-center py-10 animate-in zoom-in duration-500">
           <CheckCircleIcon className="h-20 w-20 text-green-600 mx-auto mb-4" />
           <h2 className="text-3xl font-bold text-gray-900">Application Sent!</h2>
-          <p className="text-gray-600 mt-2">Check your email for confirmation.</p>
-          <Button onClick={() => window.location.reload()} className="bg-green-600 hover:bg-green-700 mt-6">Submit Another</Button>
+          <p className="text-gray-600 mt-2">Your loan application has been received. Our team will review it and contact you via email shortly.</p>
+          <Button onClick={() => window.location.reload()} className="bg-green-600 hover:bg-green-700 mt-8 px-10">Back to Top</Button>
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
           <div className="mb-8 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-green-700 uppercase">Step {step} of 6</span>
+              <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Progress</span>
+              <span className="text-xs font-bold text-gray-500">Step {step} of 6</span>
             </div>
             <div className="flex gap-1.5">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className={`h-2 w-6 rounded-full ${step >= i ? 'bg-green-600 w-10' : 'bg-gray-300'}`} />
+                <div key={i} className={`h-1.5 transition-all duration-300 rounded-full ${step >= i ? 'bg-green-600 w-8' : 'bg-gray-300 w-4'}`} />
               ))}
             </div>
           </div>
-          <div className="min-h-[340px]">{renderStep()}</div>
-          <div className="mt-10 flex justify-between border-t pt-6">
-            <button type="button" disabled={step === 1 || isLoading} onClick={() => setStep(s => s - 1)} className="px-6 py-2 text-sm text-gray-600">Back</button>
+
+          <div className="min-h-[360px]">{renderStep()}</div>
+
+          <div className="mt-10 flex justify-between border-t border-gray-100 pt-6">
+            <button 
+              type="button" 
+              disabled={step === 1 || isLoading} 
+              onClick={() => setStep(s => s - 1)} 
+              className="px-6 py-2 text-sm font-bold text-gray-400 hover:text-gray-600 disabled:opacity-30"
+            >
+              Back
+            </button>
+            
             {step < 6 ? (
-              <button type="button" onClick={handleNext} className="bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700">Next</button>
+              <button 
+                type="button" 
+                onClick={handleNext} 
+                className="bg-green-600 text-white px-10 py-2.5 rounded-lg font-bold hover:bg-green-700 shadow-md active:scale-95 transition-all"
+              >
+                Continue
+              </button>
             ) : (
               <Button 
                 type="submit" 
                 disabled={isLoading} 
-                className="bg-green-600 hover:bg-green-700 px-10 flex items-center gap-2 justify-center min-w-[160px]"
+                className="bg-green-700 hover:bg-green-800 px-10 flex items-center gap-2 justify-center min-w-[180px] shadow-lg"
               >
                 {isLoading ? (
                   <>
                     <Spinner />
-                    <span>Sending...</span>
+                    <span>Processing...</span>
                   </>
                 ) : (
-                  'Confirm & Submit'
+                  'Submit Application'
                 )}
               </Button>
             )}

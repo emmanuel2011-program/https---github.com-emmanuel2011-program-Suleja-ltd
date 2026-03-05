@@ -117,6 +117,9 @@ export async function createLoan(prevState: any, formData: FormData) {
   const accountType = (formData.get('accountType') as string) || 'Savings';
   const purposeOfLoan = formData.get('purposeOfLoan') as string;
   
+  // 1. CAPTURE THE MANUAL REQUESTED DATE
+  const requestedDate = toNull(formData.get('requestedDate') as string) || new Date().toISOString().split('T')[0];
+
   let repaymentDate = toNull(formData.get('repaymentDate') as string);
   if (!repaymentDate) {
       const fallback = new Date();
@@ -180,7 +183,7 @@ export async function createLoan(prevState: any, formData: FormData) {
         ${accountName}, ${accountType}, ${purposeOfLoan}, ${repaymentDate},
         ${spouseName}, ${spouseMobilePhone}, ${spouseDOB}, ${spouseTitle}, ${spouseGender},
         ${spouseStateOfOrigin}, ${spouseLGA}, ${spouseNationality}, ${spouseResidentialAddress},
-        ${passportUrl}, ${idCardUrl}, 'pending', CURRENT_DATE, ${gender}, ${residentialAddress}
+        ${passportUrl}, ${idCardUrl}, 'pending', ${requestedDate}, ${gender}, ${residentialAddress}
       )
     `;
 
@@ -211,9 +214,6 @@ export async function createLoan(prevState: any, formData: FormData) {
 /**
  * Action to Approve or Reject a Loan
  */
-/**
- * Action to Approve or Reject a Loan
- */
 export async function updateLoanStatus(
   loanId: string, 
   newStatus: 'approved' | 'rejected', 
@@ -221,26 +221,22 @@ export async function updateLoanStatus(
   firstName: string
 ) {
   try {
-    // 1. Fetch the specific loan details first for the email
     const loanQuery = await sql`
       SELECT loan_amount, repayment_date FROM loan_applications WHERE id = ${loanId}
     `;
     const loanDetails = loanQuery.rows[0];
 
-    // 2. Update Database Status
     await sql`
       UPDATE loan_applications 
       SET status = ${newStatus} 
       WHERE id = ${loanId}
     `;
 
-    // 3. Send Status Update Email
     if (process.env.RESEND_API_KEY) {
       try {
         await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [applicantEmail],
-          cc: [ADMIN_EMAIL],
           subject: `Loan Application Status: ${newStatus.toUpperCase()}`,
           react: LoanStatusEmail({ 
             firstName, 
@@ -249,7 +245,6 @@ export async function updateLoanStatus(
             repaymentDate: loanDetails?.repayment_date
           }), 
         });
-        console.log(`Email details: Amount ₦${loanDetails?.loan_amount} sent to ${applicantEmail}`);
       } catch (emailErr) {
         console.error('Email sending failed:', emailErr);
       }
@@ -264,6 +259,7 @@ export async function updateLoanStatus(
     return { success: false, message: 'Failed to update status.' };
   }
 }
+
 /**
  * Fetch Members for Admin Directory
  */
