@@ -5,9 +5,11 @@ import { LoanReminderEmail } from '@/app/ui/emails/loan-reminder';
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Helper to prevent Rate Limiting (429 errors)
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function sendDailyReminders() {
   try {
-    // 1. Fetching approved loans due exactly tomorrow
     const expiringLoans = await sql`
       SELECT 
         email, 
@@ -25,7 +27,6 @@ export async function sendDailyReminders() {
 
     for (const loan of expiringLoans) {
       try {
-        // 2. Updated 'from' to your verified domain
         const { data, error } = await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [loan.email],
@@ -33,15 +34,27 @@ export async function sendDailyReminders() {
           react: LoanReminderEmail({
             firstName: loan.first_name, 
             loanAmount: Number(loan.loan_amount).toLocaleString('en-NG'), 
-            repaymentDate: new Date(loan.repayment_date).toDateString(),
+            // Ensures the date stays accurate to the DB entry
+            repaymentDate: new Date(loan.repayment_date).toLocaleDateString('en-GB', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            }),
           }),
         });
 
         if (error) {
           console.error(`Resend error for ${loan.email}:`, error);
+          results.push({ email: loan.email, success: false, error });
+        } else {
+          results.push({ email: loan.email, success: true });
         }
 
-        results.push({ email: loan.email, success: !error });
+        // --- THE FIX: RATE LIMIT PROTECTION ---
+        // Wait 600ms between each email to stay under 2 requests/second
+        await delay(600);
+
       } catch (sendError) {
         console.error(`Failed to send to ${loan.email}:`, sendError);
         results.push({ email: loan.email, success: false });
@@ -52,6 +65,6 @@ export async function sendDailyReminders() {
 
   } catch (dbError) {
     console.error('Database connection error in Cron:', dbError);
-    throw dbError; // This will trigger a 500 error in your API route so you know it failed
+    throw dbError; 
   }
 }
