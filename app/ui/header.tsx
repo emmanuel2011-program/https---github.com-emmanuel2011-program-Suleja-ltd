@@ -75,7 +75,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
               }`}
             >
               <EnvelopeIcon className="h-6 w-6" />
-              {pendingCount > 0 && (
+              {true && (
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white ring-2 ring-green-50 animate-bounce">
                   {pendingCount}
                 </span>
@@ -118,6 +118,51 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
 
       {/* Mobile Menu (same as yours) */}
       {/* ... */}
+      {/* Mobile Menu */}
+      {menuOpen && (
+        <nav className="mt-4 flex flex-col gap-1 md:hidden border-t border-green-100 pt-4 animate-in slide-in-from-top duration-200">
+          <NavLink href="/">Home</NavLink>
+          <NavLink href="/membership">Memberships</NavLink>
+          <NavLink href="/loans">Loans</NavLink>
+          <NavLink href="/contact">Contact</NavLink>
+
+          {session && <NavLink href="/dashboard">Dashboard</NavLink>}
+
+          {isAdmin && (
+            <NavLink href="/dashboard/loans">
+              <div className="flex items-center justify-between w-full">
+                <span>Loan Applications</span>
+                {pendingCount > 0 && (
+                  <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    {pendingCount}
+                  </span>
+                )}
+              </div>
+            </NavLink>
+          )}
+
+          <div className="pt-4 mt-2 border-t border-green-100">
+            {session ? (
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                className="w-full flex items-center justify-between rounded-md bg-red-50 px-4 py-3 text-red-600 font-bold text-sm"
+              >
+                <span>Logout</span>
+                <ArrowLeftOnRectangleIcon className="h-5 w-5" />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMenuOpen(false)}
+                className="w-full flex items-center justify-between rounded-md bg-green-700 px-4 py-3 text-white font-bold text-sm shadow-md"
+              >
+                <span>Admin Login</span>
+                <ArrowRightOnRectangleIcon className="h-5 w-5" />
+              </Link>
+            )}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }
