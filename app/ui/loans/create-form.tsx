@@ -169,21 +169,32 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
   };
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setIsLoading(true);
+  e.preventDefault();
+  setIsLoading(true);
 
-    try {
-      const formData = new FormData();
-      Object.entries(form).forEach(([key, value]) => {
-        if (value !== null && !(value instanceof File)) {
-          formData.append(key, value.toString());
-        }
-      });
+  try {
+    const formData = new FormData();
+    Object.entries(form).forEach(([key, value]) => {
+      if (value !== null && !(value instanceof File)) {
+        formData.append(key, value.toString());
+      }
+    });
 
-      const repDate = new Date();
-      repDate.setDate(repDate.getDate() + 30);
-      formData.append('repaymentDate', repDate.toISOString().split('T')[0]);
+    // --- DYNAMIC REPAYMENT LOGIC START ---
+    // 1. Use the Requested Date as the starting point
+    const baseDate = new Date(form.requestedDate);
+    
+    // 2. Determine how many months to add based on the 'duration' select field
+    const monthsToAdd = form.duration === '2 Months' ? 2 : 1;
+    
+    // 3. Set the repayment date
+    baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
+    
+    // 4. Append the correctly calculated date
+    formData.append('repaymentDate', baseDate.toISOString().split('T')[0]);
+    // --- DYNAMIC REPAYMENT LOGIC END ---
 
+    // ... rest of your code (image compression and createLoan call)
       if (form.passportFile) {
         const compressed = await compressImage(form.passportFile);
         formData.append('passportFile', compressed, 'passport.jpg');
