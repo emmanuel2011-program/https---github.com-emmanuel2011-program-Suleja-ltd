@@ -182,18 +182,25 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
 
     // --- DYNAMIC REPAYMENT LOGIC START ---
     // 1. Use the Requested Date as the starting point
-    const baseDate = new Date(form.requestedDate);
-    
-    // 2. Determine how many months to add based on the 'duration' select field
-    const monthsToAdd = form.duration === '2 Months' ? 2 : 1;
-    
-    // 3. Set the repayment date
-    baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
-    
-    // 4. Append the correctly calculated date
-    formData.append('repaymentDate', baseDate.toISOString().split('T')[0]);
-    // --- DYNAMIC REPAYMENT LOGIC END ---
+    // 1. Split the YYYY-MM-DD string to avoid timezone "rollback"
+    const [year, month, day] = form.requestedDate.split('-').map(Number);
 
+// 2. Create the date object using the local constructor (months are 0-indexed)
+    const baseDate = new Date(year, month - 1, day);
+
+// 3. Determine how many months to add
+    const monthsToAdd = form.duration === '2 Months' ? 2 : 1;
+
+// 4. Set the repayment date
+    baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
+
+// 5. Format back to YYYY-MM-DD manually to keep it clean
+    const y = baseDate.getFullYear();
+    const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+    const d = String(baseDate.getDate()).padStart(2, '0');
+    const finalRepaymentDate = `${y}-${m}-${d}`;
+
+    formData.append('repaymentDate', finalRepaymentDate);
     // ... rest of your code (image compression and createLoan call)
       if (form.passportFile) {
         const compressed = await compressImage(form.passportFile);
