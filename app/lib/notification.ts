@@ -1,14 +1,11 @@
 import postgres from 'postgres';
 import { Resend } from 'resend';
-// Pointing to your actual UI template
 import { LoanReminderEmail } from '@/app/ui/emails/loan-reminder'; 
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function checkAndSendReminders() {
-  // Using your real table: loan_applications
-  // Using your real column: repayment_date
   const expiringLoans = await sql`
     SELECT 
       email, 
@@ -24,14 +21,28 @@ export async function checkAndSendReminders() {
 
   for (const loan of expiringLoans) {
     try {
+      // 1. Fix the Date Jump (Force UTC so it stays on the 10th)
+      const formattedDate = new Date(loan.repayment_date).toLocaleDateString('en-NG', {
+        timeZone: 'UTC', 
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+
+      // 2. Fix the Currency (Ensure Naira formatting)
+      const formattedAmount = new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+      }).format(loan.loan_amount / 100); // Divided by 100 if stored in kobo
+
       const { data, error } = await resend.emails.send({
         from: 'SulejaHH <onboarding@resend.dev>',
         to: [loan.email],
         subject: 'Urgent: Your Loan Repayment is Due Tomorrow',
         react: LoanReminderEmail({
           firstName: loan.first_name, 
-          loanAmount: Number(loan.loan_amount).toLocaleString('en-NG'), 
-          repaymentDate: new Date(loan.repayment_date).toDateString(),
+          loanAmount: formattedAmount, 
+          repaymentDate: formattedDate,
         }),
       });
 
