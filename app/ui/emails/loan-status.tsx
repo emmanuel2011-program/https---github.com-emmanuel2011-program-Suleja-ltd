@@ -90,7 +90,6 @@ export const LoanStatusEmail = ({
 
               <Hr style={{ borderColor: '#ddd' }} />
 
-              <Text>Official Due Date: <strong>{formattedDueDate}</strong></Text>
               <Text style={{ color: '#dc2626', fontWeight: 'bold' }}>
                 Repayment Reminder Date: {formattedReminderDate}
               </Text>
