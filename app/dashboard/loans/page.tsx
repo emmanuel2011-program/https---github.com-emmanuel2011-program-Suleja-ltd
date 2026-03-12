@@ -18,9 +18,14 @@ export default function AdminLoansPage() {
 
   useEffect(() => {
     async function loadLoans() {
-      const data = await getPendingLoansAction();
-      setLoans(data);
-      setLoading(false);
+      try {
+        const data = await getPendingLoansAction();
+        setLoans(data || []);
+      } catch (error) {
+        toast.error("Failed to load loans");
+      } finally {
+        setLoading(false);
+      }
     }
     loadLoans();
   }, []);
@@ -34,7 +39,7 @@ export default function AdminLoansPage() {
         setLoans((prev) => prev.filter((l) => l.id !== loan.id));
         return `Loan for ${loan.first_name} has been ${status}!`;
       },
-      error: (err) => `Error: ${err.message}`,
+      error: (err) => `Error: ${err.message || 'Update failed'}`,
     });
   };
 
@@ -42,13 +47,13 @@ export default function AdminLoansPage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 animate-pulse">
         <InboxIcon className="h-12 w-12 text-gray-300" />
-        <p className="mt-4 text-gray-500">Loading applications...</p>
+        <p className="mt-4 text-gray-500 font-medium">Loading applications...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full px-4">
+    <div className="w-full px-2 md:px-4">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Loan Approval Queue</h1>
         <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -66,7 +71,7 @@ export default function AdminLoansPage() {
                 <div className="flex items-center gap-2 mb-1">
                   <h2 className="text-lg font-bold text-gray-900">{loan.first_name} {loan.surname}</h2>
                   <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded uppercase">
-                    Ref: {loan.id.toString().slice(0, 8)}
+                    Ref: {loan.id?.toString().slice(0, 8)}
                   </span>
                 </div>
                 <p className="text-sm text-gray-500 mb-4">{loan.email}</p>
@@ -74,7 +79,7 @@ export default function AdminLoansPage() {
                 <div className="flex flex-wrap gap-4 items-center">
                   <div className="flex items-center text-green-700 font-bold">
                     <BanknotesIcon className="h-5 w-5 mr-1 flex-shrink-0" />
-                    ₦{Number(loan.loan_amount).toLocaleString()}
+                    ₦{Number(loan.loan_amount || 0).toLocaleString()}
                   </div>
                   <div className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-medium">
                     {loan.duration}
@@ -82,24 +87,23 @@ export default function AdminLoansPage() {
                 </div>
               </div>
 
-              {/* 2. Document & Verification Links (Fixed for Mobile) */}
+              {/* 2. Document & Verification (Yahoo Envelope Fix) */}
               <div className="flex items-center justify-around md:justify-center gap-4 md:gap-8 border-t border-b md:border-t-0 md:border-b-0 md:border-l md:border-r py-4 md:py-0 md:px-8">
-                {/* THE YAHOO ENVELOPE - Forced visibility */}
                 <a 
                   href={`https://mail.yahoo.com/d/search/keyword=${encodeURIComponent(loan.email)}`} 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="flex flex-col items-center gap-1 group"
+                  className="flex flex-col items-center gap-1 group shrink-0"
                 >
-                  <div className="p-3 bg-blue-600 rounded-full text-white shadow-sm group-hover:bg-blue-700 transition-all">
+                  <div className="p-3 bg-blue-600 rounded-full text-white shadow-sm group-hover:bg-blue-700 transition-all flex items-center justify-center">
                     <EnvelopeIcon className="h-5 w-5 flex-shrink-0" strokeWidth={2.5} />
                   </div>
                   <span className="text-[10px] font-bold text-blue-700 uppercase">Inbox</span>
                 </a>
 
                 {loan.passport_url && (
-                  <a href={loan.passport_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 group">
-                    <div className="p-3 bg-gray-100 rounded-full text-gray-600 group-hover:bg-green-100 group-hover:text-green-700 transition-all">
+                  <a href={loan.passport_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 group shrink-0">
+                    <div className="p-3 bg-gray-100 rounded-full text-gray-600 group-hover:bg-green-100 group-hover:text-green-700 transition-all flex items-center justify-center">
                       <EyeIcon className="h-5 w-5 flex-shrink-0" />
                     </div>
                     <span className="text-[10px] font-bold text-gray-500 uppercase">Passport</span>
@@ -107,8 +111,8 @@ export default function AdminLoansPage() {
                 )}
                 
                 {loan.id_card_url && (
-                  <a href={loan.id_card_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 group">
-                    <div className="p-3 bg-gray-100 rounded-full text-gray-600 group-hover:bg-green-100 group-hover:text-green-700 transition-all">
+                  <a href={loan.id_card_url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 group shrink-0">
+                    <div className="p-3 bg-gray-100 rounded-full text-gray-600 group-hover:bg-green-100 group-hover:text-green-700 transition-all flex items-center justify-center">
                       <EyeIcon className="h-5 w-5 flex-shrink-0" />
                     </div>
                     <span className="text-[10px] font-bold text-gray-500 uppercase">ID Card</span>
