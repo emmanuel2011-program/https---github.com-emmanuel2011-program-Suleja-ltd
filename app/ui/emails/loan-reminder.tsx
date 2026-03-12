@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 export const LoanReminderEmail = ({ 
   firstName, 
   loanAmount, 
@@ -9,8 +7,13 @@ export const LoanReminderEmail = ({
   loanAmount: number | string; 
   repaymentDate: string; 
 }) => {
-  // 1. Calculate Interest and Totals
-  const principal = Number(loanAmount);
+  // 1. Clean and Parse Loan Amount
+  // This removes "₦", commas, and spaces so "₦ 10,000" becomes "10000"
+  const cleanAmount = typeof loanAmount === 'string' 
+    ? loanAmount.replace(/[^0-9.]/g, '') 
+    : loanAmount;
+
+  const principal = Number(cleanAmount) || 0; // Fallback to 0 if parsing fails
   const interest = principal * 0.15; // Static 15%
   const totalDue = principal + interest;
 
@@ -77,20 +80,22 @@ export const LoanReminderEmail = ({
       }}>
         <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', fontSize: '18px' }}>Repayment Statement:</p>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tr>
-            <td style={{ padding: '5px 0' }}>Principal Amount:</td>
-            <td style={{ textAlign: 'right' }}>₦{principal.toLocaleString('en-NG')}</td>
-          </tr>
-          <tr>
-            <td style={{ padding: '5px 0' }}>Interest (15%):</td>
-            <td style={{ textAlign: 'right' }}>₦{interest.toLocaleString('en-NG')}</td>
-          </tr>
-          <tr style={{ fontWeight: 'bold', fontSize: '18px', borderTop: '1px solid #fca5a5' }}>
-            <td style={{ padding: '10px 0' }}>Total Due:</td>
-            <td style={{ textAlign: 'right', padding: '10px 0', color: '#b91c1c' }}>
-               ₦{totalDue.toLocaleString('en-NG')}
-            </td>
-          </tr>
+          <tbody>
+            <tr>
+              <td style={{ padding: '5px 0' }}>Principal Amount:</td>
+              <td style={{ textAlign: 'right' }}>₦{principal.toLocaleString('en-NG')}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '5px 0' }}>Interest (15%):</td>
+              <td style={{ textAlign: 'right' }}>₦{interest.toLocaleString('en-NG')}</td>
+            </tr>
+            <tr style={{ fontWeight: 'bold', fontSize: '18px', borderTop: '1px solid #fca5a5' }}>
+              <td style={{ padding: '10px 0' }}>Total Due:</td>
+              <td style={{ textAlign: 'right', padding: '10px 0', color: '#b91c1c' }}>
+                 ₦{totalDue.toLocaleString('en-NG')}
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
 
