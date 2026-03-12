@@ -7,7 +7,16 @@ import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
+// Import your new status template
+import { LoanStatusEmail } from '@/app/ui/emails/loan-status'; 
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+// Set your admin email for monitoring
+const ADMIN_EMAIL = 'admin@shhmcsoc.me'; 
+
+/**
+ * Action to handle User Login
+ */
 export async function authenticate(
   prevState: string | undefined,
   formData: FormData,
@@ -26,8 +35,6 @@ export async function authenticate(
     throw error;
   }
 }
-
-const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 /**
  * Action to create a new Membership
@@ -61,25 +68,31 @@ export async function createMembership(formData: FormData) {
       )
     `;
 
-    try {
-      await resend.emails.send({
-        from: 'Cooperative <onboarding@resend.dev>',
-        to: [rawFormData.email],
-        subject: 'Welcome to the Cooperative!',
-        html: `<h1>Welcome, ${rawFormData.firstName}!</h1><p>Your registration was successful.</p>`,
-      });
-    } catch (e) { console.error('Email error:', e); }
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await resend.emails.send({
+          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+          to: [rawFormData.email],
+          subject: 'Welcome to the Cooperative!',
+          html: `<h1>Welcome, ${rawFormData.firstName}!</h1><p>Your registration was successful.</p>`,
+          text: `Welcome, ${rawFormData.firstName}! Your registration at SulejaHH Cooperative was successful.`,
+        });
+      } catch (e) {
+        console.error('Membership Email failed to send:', e);
+      }
+    }
 
     revalidatePath('/membership');
     return { success: true };
   } catch (error: any) {
+    console.error('Membership Database Error:', error);
     if (error.code === '23505') return { success: false, message: 'Email already registered.' };
     return { success: false, message: 'Database Error.' };
   }
 }
 
 /**
- * Action to create a Loan Application with BLOB UPLOAD
+ * Action to create a Loan Application
  */
 export async function createLoan(prevState: any, formData: FormData) {
   const toNull = (val: string | null) => (val && val.trim() !== '' ? val : null);
@@ -93,6 +106,8 @@ export async function createLoan(prevState: any, formData: FormData) {
   const nationality = (formData.get('nationality') as string) || 'Nigerian';
   const title = (formData.get('title') as string) || 'Mr/Ms';
   const tin = toNull(formData.get('tin') as string);
+  const residentialAddress = formData.get('residentialAddress') as string;
+
   const loanAmount = formData.get('loanAmount') as string;
   const duration = formData.get('duration') as string;
   const interest = formData.get('interest') as string;
@@ -101,90 +116,152 @@ export async function createLoan(prevState: any, formData: FormData) {
   const accountName = formData.get('accountName') as string;
   const accountType = (formData.get('accountType') as string) || 'Savings';
   const purposeOfLoan = formData.get('purposeOfLoan') as string;
-  const repaymentDate = toNull(formData.get('repaymentDate') as string);
+  
+  // 1. CAPTURE THE MANUAL REQUESTED DATE
+  const requestedDate = toNull(formData.get('requestedDate') as string) || new Date().toISOString().split('T')[0];
+
+  let repaymentDate = toNull(formData.get('repaymentDate') as string);
+  if (!repaymentDate) {
+      const fallback = new Date();
+      fallback.setDate(fallback.getDate() + 30);
+      repaymentDate = fallback.toISOString().split('T')[0];
+  }
+
+  const spouseTitle = toNull(formData.get('spouseTitle') as string);
   const spouseName = toNull(formData.get('spouseName') as string);
   const spouseMobilePhone = toNull(formData.get('spouseMobilePhone') as string);
   const spouseDOB = toNull(formData.get('spouseDOB') as string);
-
-  // --- START BLOB UPLOAD LOGIC ---
-  const passportFile = formData.get('passportFile') as File;
-  const idCardFile = formData.get('idCardFile') as File;
-  // TEMPORARY TEST - Replace the string with your actual token
-
-
-  let passportUrl = null;
-  let idCardUrl = null;
+  const spouseGender = toNull(formData.get('spouseGender') as string);
+  const spouseStateOfOrigin = toNull(formData.get('spouseStateOfOrigin') as string);
+  const spouseLGA = toNull(formData.get('spouseLGA') as string);
+  const spouseNationality = toNull(formData.get('spouseNationality') as string);
+  const spouseResidentialAddress = toNull(formData.get('spouseResidentialAddress') as string);
 
   try {
-    // Upload Passport
+    let passportUrl = null;
+    let idCardUrl = null;
+
+    const passportFile = formData.get('passportFile') as File;
+    const idCardFile = formData.get('idCardFile') as File;
+
     if (passportFile && passportFile.size > 0) {
-      const passportBlob = await put(`passports/${Date.now()}-${passportFile.name}`, passportFile, {
-        access: 'public',
-      });
+      const passportBlob = await put(`passports/${Date.now()}-${passportFile.name}`, passportFile, { access: 'public' });
       passportUrl = passportBlob.url;
     }
 
-    // Upload ID Card
     if (idCardFile && idCardFile.size > 0) {
-      const idBlob = await put(`ids/${Date.now()}-${idCardFile.name}`, idCardFile, {
-        access: 'public',
-      });
+      const idBlob = await put(`ids/${Date.now()}-${idCardFile.name}`, idCardFile, { access: 'public' });
       idCardUrl = idBlob.url;
     }
 
-    // Check Membership
     const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
     let memberId;
+    
     if (existingMember.rows.length > 0) {
       memberId = existingMember.rows[0].id;
     } else {
       const newMember = await sql`
         INSERT INTO memberships (surname, first_name, email, mobile_phone, date_of_birth, gender, nationality, title, tin, residential_address)
-        VALUES (${surname}, ${firstName}, ${email}, ${mobilePhone}, ${dateOfBirth}, ${gender}, ${nationality}, ${title}, ${tin}, 'Not Provided')
+        VALUES (${surname}, ${firstName}, ${email}, ${mobilePhone}, ${dateOfBirth}, ${gender}, ${nationality}, ${title}, ${tin}, ${residentialAddress})
         RETURNING id
       `;
       memberId = newMember.rows[0].id;
     }
 
-    // Insert Loan Application with URLs
     await sql`
       INSERT INTO loan_applications (
         member_id, surname, first_name, email, mobile_phone, date_of_birth,
         tin, loan_amount, duration, interest, bank_name, account_number, 
         account_name, account_type, purpose_of_loan, repayment_date,
-        spouse_name, spouse_mobile_phone, spouse_dob,
-        passport_url, id_card_url, status, request_date, gender
+        spouse_name, spouse_mobile_phone, spouse_dob, spouse_title, spouse_gender,
+        spouse_state_of_origin, spouse_lga, spouse_nationality, spouse_residential_address,
+        passport_url, id_card_url, status, request_date, gender, residential_address
       )
       VALUES (
         ${memberId}, ${surname}, ${firstName}, ${email}, ${mobilePhone}, ${dateOfBirth},
         ${tin}, ${parseFloat(loanAmount)}, ${duration}, ${interest}, ${bankName}, ${accountNumber}, 
         ${accountName}, ${accountType}, ${purposeOfLoan}, ${repaymentDate},
-        ${spouseName}, ${spouseMobilePhone}, ${spouseDOB},
-        ${passportUrl}, ${idCardUrl}, 'pending', CURRENT_DATE, ${gender}
+        ${spouseName}, ${spouseMobilePhone}, ${spouseDOB}, ${spouseTitle}, ${spouseGender},
+        ${spouseStateOfOrigin}, ${spouseLGA}, ${spouseNationality}, ${spouseResidentialAddress},
+        ${passportUrl}, ${idCardUrl}, 'pending', ${requestedDate}, ${gender}, ${residentialAddress}
       )
     `;
 
-    // Email Notification
-    try {
-      await resend.emails.send({
-        from: 'Cooperative <onboarding@resend.dev>',
-        to: [email],
-        subject: 'Loan Application Received',
-        react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
-      });
-    } catch (e) { console.error('Email error:', e); }
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await resend.emails.send({
+          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+          to: [email],
+          subject: 'Loan Application Received',
+          text: `Hello ${firstName}, your loan application for ₦${loanAmount} has been received.`,
+          react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
+        });
+      } catch (emailError) {
+        console.error('Email Render/Send failure:', emailError);
+      }
+    }
 
     revalidatePath('/dashboard/loans');
+    revalidatePath('/'); 
     return { success: true, message: 'Application submitted successfully!' };
 
   } catch (error: any) {
-    console.error('Process Error:', error);
-    return { success: false, message: `Error: ${error.message}` };
+    console.error('Critical Process Error:', error);
+    return { success: false, message: `System Error: ${error.message}` };
   }
 }
 
 /**
- * Fetch Members including their ID URLs
+ * Action to Approve or Reject a Loan
+ */
+export async function updateLoanStatus(
+  loanId: string, 
+  newStatus: 'approved' | 'rejected', 
+  applicantEmail: string, 
+  firstName: string
+) {
+  try {
+    const loanQuery = await sql`
+      SELECT loan_amount, repayment_date FROM loan_applications WHERE id = ${loanId}
+    `;
+    const loanDetails = loanQuery.rows[0];
+
+    await sql`
+      UPDATE loan_applications 
+      SET status = ${newStatus} 
+      WHERE id = ${loanId}
+    `;
+
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await resend.emails.send({
+          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+          to: [applicantEmail],
+          subject: `Loan Application Status: ${newStatus.toUpperCase()}`,
+          react: LoanStatusEmail({ 
+            firstName, 
+            status: newStatus,
+            amount: loanDetails?.loan_amount,
+            repaymentDate: loanDetails?.repayment_date
+          }), 
+        });
+      } catch (emailErr) {
+        console.error('Email sending failed:', emailErr);
+      }
+    }
+
+    revalidatePath('/dashboard/loans');
+    revalidatePath('/'); 
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to update status:', error);
+    return { success: false, message: 'Failed to update status.' };
+  }
+}
+
+/**
+ * Fetch Members for Admin Directory
  */
 export async function fetchAllMembers() {
   try {
@@ -197,5 +274,34 @@ export async function fetchAllMembers() {
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch the membership directory.');
+  }
+}
+
+/**
+ * Fetch count of pending loans
+ */
+export async function getPendingCount() {
+  try {
+    const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
+    return Number(data.rows[0].count);
+  } catch (error) {
+    console.error('Error fetching pending count:', error);
+    return 0;
+  }
+}
+
+/**
+ * Fetch pending loans for client action
+ */
+export async function getPendingLoansAction() {
+  try {
+    const { rows } = await sql`
+      SELECT * FROM loan_applications 
+      WHERE status = 'pending' 
+      ORDER BY request_date DESC`;
+    return rows;
+  } catch (error) {
+    console.error('Failed to fetch loans:', error);
+    return [];
   }
 }
