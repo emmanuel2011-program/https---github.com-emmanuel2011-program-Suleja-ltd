@@ -10,6 +10,7 @@ import {
   BanknotesIcon,
   HeartIcon,
   IdentificationIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
 import { createLoan } from '@/app/lib/actions';
@@ -42,7 +43,7 @@ async function compressImage(file: File): Promise<Blob | File> {
         ctx?.drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
           resolve(blob || file);
-        }, 'image/jpeg', 0.7); // 70% quality
+        }, 'image/jpeg', 0.7);
       };
     };
   });
@@ -69,7 +70,7 @@ type FormState = {
   dateOfBirth: string;
   purposeOfLoan: string;
   loanAmount: string;
-  requestedDate: string; // New field
+  requestedDate: string;
   duration: string;
   interest: string;
   bankName: string;
@@ -103,7 +104,7 @@ const initialFormState: FormState = {
   tin: '',
   purposeOfLoan: '',
   loanAmount: '',
-  requestedDate: '', // New field
+  requestedDate: '',
   duration: '1 Month',
   interest: '15% Monthly',
   bankName: '',
@@ -169,39 +170,33 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
   };
 
   async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  setIsLoading(true);
+    e.preventDefault();
+    setIsLoading(true);
 
-  try {
-    const formData = new FormData();
-    Object.entries(form).forEach(([key, value]) => {
-      if (value !== null && !(value instanceof File)) {
-        formData.append(key, value.toString());
-      }
-    });
+    try {
+      const formData = new FormData();
+      Object.entries(form).forEach(([key, value]) => {
+        if (value !== null && !(value instanceof File)) {
+          formData.append(key, value.toString());
+        }
+      });
 
-    // --- DYNAMIC REPAYMENT LOGIC START ---
-    // 1. Use the Requested Date as the starting point
-    // 1. Split the YYYY-MM-DD string to avoid timezone "rollback"
-    const [year, month, day] = form.requestedDate.split('-').map(Number);
+      // --- 1 MONTH REPAYMENT LOGIC ---
+      const [year, month, day] = form.requestedDate.split('-').map(Number);
+      const baseDate = new Date(year, month - 1, day);
+      baseDate.setMonth(baseDate.getMonth() + 1);
 
-// 2. Create the date object using the local constructor (months are 0-indexed)
-    const baseDate = new Date(year, month - 1, day);
+      const y = baseDate.getFullYear();
+      const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+      const d = String(baseDate.getDate()).padStart(2, '0');
+      const finalRepaymentDate = `${y}-${m}-${d}`;
 
-// 3. Determine how many months to add
-    const monthsToAdd = form.duration === '2 Months' ? 2 : 1;
+      formData.append('repaymentDate', finalRepaymentDate);
+      
+      const principal = Number(form.loanAmount);
+      const totalInterest = principal * 0.15;
+      formData.append('calculatedInterest', totalInterest.toString());
 
-// 4. Set the repayment date
-    baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
-
-// 5. Format back to YYYY-MM-DD manually to keep it clean
-    const y = baseDate.getFullYear();
-    const m = String(baseDate.getMonth() + 1).padStart(2, '0');
-    const d = String(baseDate.getDate()).padStart(2, '0');
-    const finalRepaymentDate = `${y}-${m}-${d}`;
-
-    formData.append('repaymentDate', finalRepaymentDate);
-    // ... rest of your code (image compression and createLoan call)
       if (form.passportFile) {
         const compressed = await compressImage(form.passportFile);
         formData.append('passportFile', compressed, 'passport.jpg');
@@ -236,24 +231,18 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input type="text" placeholder="First Name *" value={form.firstName} onChange={e => update('firstName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               <input type="text" placeholder="Surname *" value={form.surname} onChange={e => update('surname', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
-              
               <select value={form.gender} onChange={e => update('gender', e.target.value)} className="rounded-md border p-2 text-sm bg-white" required>
                 <option value="">Select Gender *</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-
               <input type="email" placeholder="Email Address *" value={form.email} onChange={e => update('email', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
-              
               <input type="tel" placeholder="Mobile Phone (11 digits) *" value={form.mobilePhone} onChange={e => update('mobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
-              
               <input type="text" placeholder="TIN (Tax Identification Number)" value={form.tin} onChange={e => update('tin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
-
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Date of Birth *</label>
                 <input type="date" value={form.dateOfBirth} onChange={e => update('dateOfBirth', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               </div>
-
               <div className="md:col-span-2">
                 <textarea placeholder="Full Residential Address *" value={form.residentialAddress} onChange={e => update('residentialAddress', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" rows={2} required />
               </div>
@@ -266,26 +255,36 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <CurrencyDollarIcon className="h-5 w-5 text-green-600" /> Loan Details
             </h2>
+
+            {/* --- BOLD DOCUMENT SUBMISSION BOX --- */}
+            <div className="bg-green-50 border-2 border-dashed border-green-200 p-4 rounded-lg mb-4 flex gap-3 items-start">
+              <EnvelopeIcon className="h-6 w-6 text-green-700 mt-1 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-gray-900 leading-tight">
+                  Kindly submit other documents <span className="text-green-700">(BOQ, Contract Award letter, work order forms, etc)</span> via this email:
+                </p>
+                <p className="text-lg font-black text-green-800 mt-1 underline decoration-2 underline-offset-4">
+                  sfortefinance@yahoo.com
+                </p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div className="md:col-span-1">
                   <label className="text-sm font-medium mb-1 block">Requested Amount (₦) *</label>
                   <input type="number" value={form.loanAmount} onChange={e => update('loanAmount', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
                </div>
-               {/* NEW REQUESTED DATE FIELD */}
                <div className="md:col-span-1 flex flex-col gap-1">
                   <label className="text-sm font-medium mb-1 block">Requested Date *</label>
                   <input type="date" value={form.requestedDate} onChange={e => update('requestedDate', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
                </div>
                <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Repayment Duration</label>
-                <select value={form.duration} onChange={e => update('duration', e.target.value)} className="w-full rounded-md border bg-white p-2 text-sm font-semibold text-gray-700 outline-none">
-                  <option value="1 Month">1 Month</option>
-                  <option value="2 Months">2 Months</option>
-                </select>
+                <div className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-gray-600">1 Month</div>
                </div>
                <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Interest Rate</label>
-                <input type="text" value={form.interest} readOnly className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-gray-500" />
+                <div className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-green-700">15% Monthly</div>
                </div>
                <div className="md:col-span-2">
                 <textarea placeholder="Purpose of Loan *" value={form.purposeOfLoan} onChange={e => update('purposeOfLoan', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
@@ -338,12 +337,10 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
                 <option value="Miss">Miss</option>
               </select>
               <input type="text" placeholder="Spouse Full Name" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
-              
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Spouse Date of Birth</label>
                 <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" />
               </div>
-
               <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none">
                 <option value="">Spouse Gender</option>
                 <option value="Male">Male</option>
@@ -366,8 +363,11 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
             <div className="bg-white p-4 rounded-md shadow-sm text-sm space-y-3 border border-gray-200">
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Applicant:</span> <span>{form.firstName} {form.surname}</span></div>
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Amount:</span> <span className="font-bold text-green-700">₦{Number(form.loanAmount).toLocaleString()}</span></div>
-              <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Date Requested:</span> <span>{form.requestedDate}</span></div>
-              <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Duration:</span> <span>{form.duration}</span></div>
+              <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Duration:</span> <span>1 Month</span></div>
+              <div className="flex justify-between border-b pb-1">
+                <span className="text-gray-500">Estimated Total Due:</span> 
+                <span className="font-bold text-red-600">₦{(Number(form.loanAmount) * 1.15).toLocaleString()}</span>
+              </div>
               <div className="flex justify-between"><span className="text-gray-500">Documents:</span> <span className="text-green-600 font-medium">Ready for Upload</span></div>
             </div>
           </div>
@@ -383,7 +383,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
           <div className="bg-white p-6 rounded-lg shadow-xl border border-green-100 flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
             <p className="text-sm font-bold text-gray-700">Processing & Uploading...</p>
-            <p className="text-[10px] text-gray-400 text-center px-4">Compressing images and sending to the cooperative. Please wait.</p>
+            <p className="text-[10px] text-gray-400 text-center px-4">Compressing images and sending application. Please wait.</p>
           </div>
         </div>
       )}
@@ -420,7 +420,6 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
             >
               Back
             </button>
-            
             {step < 6 ? (
               <button 
                 type="button" 
