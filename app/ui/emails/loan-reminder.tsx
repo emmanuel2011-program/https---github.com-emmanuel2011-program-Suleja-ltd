@@ -1,17 +1,15 @@
 import * as React from 'react';
 
 export const LoanReminderEmail = ({ firstName, loanAmount, repaymentDate }: any) => {
-  // Logic to handle the "Day Before" calculation safely
+  let formattedDueDate = 'the scheduled date';
   let formattedReminderDate = 'Today';
-  let formattedDueDate = repaymentDate;
 
-  if (repaymentDate) {
+  if (repaymentDate && typeof repaymentDate === 'string') {
     try {
-      // Split to avoid timezone shifting (UTC to WAT)
-      const [year, month, day] = repaymentDate.split('T')[0].split('-').map(Number);
-      const actualDueDate = new Date(year, month - 1, day);
+      const datePart = repaymentDate.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
       
-      // Calculate Reminder Date (1 day before)
+      const actualDueDate = new Date(year, month - 1, day);
       const reminderDate = new Date(actualDueDate);
       reminderDate.setDate(actualDueDate.getDate() - 1);
 
@@ -27,43 +25,30 @@ export const LoanReminderEmail = ({ firstName, loanAmount, repaymentDate }: any)
         year: 'numeric',
       });
     } catch (e) {
-      console.error("Date formatting error", e);
+      formattedDueDate = repaymentDate;
     }
   }
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '20px', color: '#333', lineHeight: '1.5' }}>
-      <h1 style={{ color: '#dc2626', marginBottom: '20px' }}>Repayment Reminder</h1>
+    <div style={{ fontFamily: 'sans-serif', padding: '20px', color: '#333', lineHeight: '1.5', maxWidth: '600px', margin: '0 auto', border: '1px solid #eee' }}>
+      <h1 style={{ color: '#dc2626', borderBottom: '2px solid #dc2626', paddingBottom: '10px' }}>Repayment Reminder</h1>
       
       <p>Hi <strong>{firstName}</strong>,</p>
+      <p>This is a reminder that your loan is due <strong>tomorrow, {formattedDueDate}</strong>.</p>
       
-      <p>
-        This is a friendly reminder from <strong>SulejaHH</strong> that your loan cycle is expiring 
-        <strong> tomorrow, {formattedDueDate}</strong>.
-      </p>
-      
-      <div style={{ backgroundColor: '#fef2f2', padding: '15px', borderRadius: '8px', margin: '20px 0', borderLeft: '4px solid #dc2626' }}>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          <li style={{ marginBottom: '8px' }}><strong>Amount to Repay:</strong> ₦{loanAmount}</li>
-          <li style={{ marginBottom: '8px' }}><strong>Official Due Date:</strong> {formattedDueDate}</li>
-          <li><small style={{ color: '#666' }}>Reminder Generated On: {formattedReminderDate}</small></li>
-        </ul>
+      <div style={{ backgroundColor: '#fef2f2', padding: '20px', borderRadius: '8px', margin: '20px 0' }}>
+        <p style={{ margin: '0' }}><strong>Amount:</strong> ₦{loanAmount}</p>
+        <p style={{ margin: '5px 0' }}><strong>Due Date:</strong> {formattedDueDate}</p>
+        <p style={{ margin: '0', fontSize: '12px', color: '#991b1b' }}>Reminder Date: {formattedReminderDate}</p>
       </div>
 
-      <div style={{ padding: '15px', border: '1px dashed #ccc', borderRadius: '8px', marginTop: '20px' }}>
-        <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>Payment Instructions:</p>
-        <p style={{ margin: '0' }}>Please ensure your repayment is made to the following account:</p>
-        <p style={{ margin: '10px 0 0 0', color: '#1a365d' }}>
-          <strong>Bank:</strong> ZENITH BANK<br />
-          <strong>Account Name:</strong> SHH- MULTIPURPOSE COOPERATIVE SOC LTD.<br />
-          <strong>Account Number:</strong> 1310073650
-        </p>
+      <div style={{ padding: '15px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+        <p style={{ fontWeight: 'bold', marginBottom: '5px' }}>Bank Details:</p>
+        <p style={{ margin: '0' }}>Zenith Bank | 1310073650</p>
+        <p style={{ margin: '0' }}>SHH- MULTIPURPOSE COOPERATIVE SOC LTD</p>
       </div>
 
-      <p style={{ marginTop: '20px' }}>Please ignore this message if you have already settled your balance.</p>
-      
-      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '30px 0 10px 0' }} />
-      <p style={{ fontSize: '12px', color: '#666' }}>SulejaHH Management System | Automated Notification</p>
+      <p style={{ fontSize: '12px', color: '#777', marginTop: '30px' }}>SulejaHH Automated System</p>
     </div>
   );
 };
