@@ -8,6 +8,7 @@ export const LoanConfirmationEmail = ({ firstName, loanAmount, duration }: any) 
     <ul>
       <li><strong>Amount:</strong> ₦{loanAmount}</li>
       <li><strong>Duration:</strong> {duration}</li>
+      <li><strong>Loan Interest:</strong> {15}%</li>
       <li><strong>Status:</strong> Processing</li>
     </ul>
     <p>We will review your documents and get back to you shortly.</p>

@@ -12,7 +12,7 @@ import {
   EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 import { signOut } from 'next-auth/react';
-import WeatherSnippet from '@/app/ui/weather-snippet'; // Import the new component
+import WeatherSnippet from '@/app/ui/weather-snippet';
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -37,7 +37,8 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
   const pathname = usePathname();
   
   const isAdmin = session?.user?.email?.toLowerCase() === 'admin@shhmcsoc.me' || 
-                session?.user?.email?.toLowerCase() === 'info@shhmcsoc.me';
+                  session?.user?.email?.toLowerCase() === 'info@shhmcsoc.me';
+
   return (
     <header className="bg-green-50 shadow-sm px-6 py-4 sticky top-0 z-50 border-b border-green-100">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -52,13 +53,12 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
             <span className="text-[10px] text-green-600 uppercase tracking-widest">Reg: 19454</span>
           </div>
           
-          {/* WEATHER ADDED HERE */}
           <div className="hidden lg:block">
             <WeatherSnippet />
           </div>
         </div>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation (Hidden on Mobile) */}
         <nav className="hidden md:flex items-center gap-2 text-sm">
           <NavLink href="/">Home</NavLink>
           <NavLink href="/membership">Memberships</NavLink>
@@ -75,7 +75,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
               }`}
             >
               <EnvelopeIcon className="h-6 w-6" />
-              {true && (
+              {pendingCount > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white ring-2 ring-green-50 animate-bounce">
                   {pendingCount}
                 </span>
@@ -104,11 +104,35 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
           </div>
         </nav>
 
-        {/* Mobile Toggle */}
+        {/* Mobile View Items (Always visible on small screens) */}
         <div className="flex items-center gap-3 md:hidden">
-          <div className="scale-90"><WeatherSnippet /></div>
+          {/* Mobile Weather */}
+          <div className="scale-75 sm:scale-90 origin-right">
+            <WeatherSnippet />
+          </div>
+          
+          {/* MOBILE ENVELOPE - Added here for visibility on small screens */}
+          {isAdmin && (
+            <Link 
+              href="/dashboard/loans" 
+              className={`relative p-2 rounded-lg transition-colors border ${
+                pathname.includes('/dashboard/loans') 
+                  ? 'bg-green-600 text-white border-green-600 shadow-sm' 
+                  : 'text-green-700 bg-white border-green-100'
+              }`}
+            >
+              <EnvelopeIcon className="h-6 w-6" />
+              {pendingCount > 0 && (
+                <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
+                  {pendingCount}
+                </span>
+              )}
+            </Link>
+          )}
+
+          {/* Hamburger Toggle */}
           <button
-            className="p-2 text-green-700 hover:bg-green-100 rounded-lg"
+            className="p-2 text-green-700 hover:bg-green-100 rounded-lg border border-green-100"
             onClick={() => setMenuOpen(!menuOpen)}
           >
             {menuOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}
@@ -116,9 +140,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
         </div>
       </div>
 
-      {/* Mobile Menu (same as yours) */}
-      {/* ... */}
-      {/* Mobile Menu */}
+      {/* Mobile Menu Dropdown */}
       {menuOpen && (
         <nav className="mt-4 flex flex-col gap-1 md:hidden border-t border-green-100 pt-4 animate-in slide-in-from-top duration-200">
           <NavLink href="/">Home</NavLink>
@@ -145,7 +167,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
             {session ? (
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="w-full flex items-center justify-between rounded-md bg-red-50 px-4 py-3 text-red-600 font-bold text-sm"
+                className="w-full flex items-center justify-between rounded-md bg-red-50 px-4 py-3 text-red-600 font-bold text-sm border border-red-100"
               >
                 <span>Logout</span>
                 <ArrowLeftOnRectangleIcon className="h-5 w-5" />

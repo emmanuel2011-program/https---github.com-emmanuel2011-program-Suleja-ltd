@@ -11,6 +11,7 @@ import {
   HeartIcon,
   IdentificationIcon,
   EnvelopeIcon,
+  CheckBadgeIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
 import { createLoan } from '@/app/lib/actions';
@@ -89,6 +90,7 @@ type FormState = {
   spouseResidentialAddress: string;
   passportFile: File | null;
   idCardFile: File | null;
+  hasSentEmailDocs: boolean; // New Guard State
 };
 
 const initialFormState: FormState = {
@@ -124,6 +126,7 @@ const initialFormState: FormState = {
   spouseResidentialAddress: '',
   passportFile: null,
   idCardFile: null,
+  hasSentEmailDocs: false,
 };
 
 export default function LoanApplicationForm({ members }: { members: Membership[] }) {
@@ -152,9 +155,11 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       if (!form.loanAmount || Number(form.loanAmount) <= 0) return "Please enter a valid loan amount.";
       if (!form.requestedDate) return "Please select the requested date.";
       if (!form.purposeOfLoan.trim()) return "Please state the purpose of the loan.";
+      if (!form.hasSentEmailDocs) return "You must confirm document submission via email to proceed.";
     }
     if (step === 3) {
       if (!form.bankName.trim() || !form.accountNumber.trim() || !form.accountName.trim()) return "Complete bank details are required.";
+      if (form.accountNumber.length !== 10) return "Account number must be exactly 10 digits.";
     }
     if (step === 4) {
       if (!form.passportFile) return "Please upload a Passport Photograph.";
@@ -181,7 +186,6 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
         }
       });
 
-      // --- 1 MONTH REPAYMENT LOGIC ---
       const [year, month, day] = form.requestedDate.split('-').map(Number);
       const baseDate = new Date(year, month - 1, day);
       baseDate.setMonth(baseDate.getMonth() + 1);
@@ -256,16 +260,32 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               <CurrencyDollarIcon className="h-5 w-5 text-green-600" /> Loan Details
             </h2>
 
-            {/* --- BOLD DOCUMENT SUBMISSION BOX --- */}
-            <div className="bg-green-50 border-2 border-dashed border-green-200 p-4 rounded-lg mb-4 flex gap-3 items-start">
-              <EnvelopeIcon className="h-6 w-6 text-green-700 mt-1 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-bold text-gray-900 leading-tight">
-                  Kindly submit other documents <span className="text-green-700">(BOQ, Contract Award letter, work order forms, etc)</span> via this email:
-                </p>
-                <p className="text-lg font-black text-green-800 mt-1 underline decoration-2 underline-offset-4">
-                  sfortefinance@yahoo.com
-                </p>
+            <div className="bg-green-50 border-2 border-dashed border-green-200 p-4 rounded-lg mb-4">
+              <div className="flex gap-3 items-start">
+                <EnvelopeIcon className="h-6 w-6 text-green-700 mt-1 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-gray-900 leading-tight">
+                    Kindly submit other documents <span className="text-green-700">(BOQ, Contract Award letter, work order forms, etc)</span> via this email:
+                  </p>
+                  <p className="text-lg font-black text-green-800 mt-1 underline decoration-2 underline-offset-4">
+                    sfortefinance@yahoo.com
+                  </p>
+                </div>
+              </div>
+
+              {/* DOCUMENT SUBMISSION GUARD */}
+              <div className="mt-4 pt-4 border-t border-green-200">
+                 <label className="flex items-center gap-3 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={form.hasSentEmailDocs}
+                      onChange={(e) => update('hasSentEmailDocs', e.target.checked)}
+                      className="h-5 w-5 rounded border-green-300 text-green-600 focus:ring-green-500 transition-all"
+                    />
+                    <span className="text-xs font-bold text-green-800 group-hover:text-green-600 transition-colors">
+                      I have sent my BOQ/Contract documents to the email above.
+                    </span>
+                 </label>
               </div>
             </div>
 
@@ -298,10 +318,22 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
               <BanknotesIcon className="h-5 w-5 text-green-600" /> Crediting Bank
             </h2>
-            <input type="text" placeholder="Bank Name *" value={form.bankName} onChange={e => update('bankName', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" required />
-            <input type="text" placeholder="Account Number *" value={form.accountNumber} onChange={e => update('accountNumber', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" required />
-            <input type="text" placeholder="Account Name *" value={form.accountName} onChange={e => update('accountName', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" required />
-            <select value={form.accountType} onChange={e => update('accountType', e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white outline-none">
+            <input type="text" placeholder="Bank Name *" value={form.bankName} onChange={e => update('bankName', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Account Number (10 digits) *" 
+                value={form.accountNumber} 
+                onChange={e => update('accountNumber', e.target.value.replace(/\D/g, '').slice(0, 10))} 
+                className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" 
+                required 
+              />
+              <span className={`absolute right-3 top-2.5 text-[10px] font-bold ${form.accountNumber.length === 10 ? 'text-green-600' : 'text-gray-400'}`}>
+                {form.accountNumber.length}/10
+              </span>
+            </div>
+            <input type="text" placeholder="Account Name *" value={form.accountName} onChange={e => update('accountName', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+            <select value={form.accountType} onChange={e => update('accountType', e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500">
               <option value="Savings">Savings</option>
               <option value="Current">Current</option>
             </select>
@@ -330,28 +362,28 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               <HeartIcon className="h-5 w-5 text-green-600" /> Next of Kin / Spouse Information
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select value={form.spouseTitle} onChange={e => update('spouseTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none">
+              <select value={form.spouseTitle} onChange={e => update('spouseTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500">
                 <option value="">Select Title</option>
                 <option value="Mr">Mr</option>
                 <option value="Mrs">Mrs</option>
                 <option value="Miss">Miss</option>
               </select>
-              <input type="text" placeholder="Spouse Full Name" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
+              <input type="text" placeholder="Spouse Full Name" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Spouse Date of Birth</label>
-                <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none" />
+                <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
               </div>
-              <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none">
+              <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500">
                 <option value="">Spouse Gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-              <input type="tel" placeholder="Spouse Phone" value={form.spouseMobilePhone} onChange={e => update('spouseMobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none" />
-              <input type="text" placeholder="Spouse Nationality" value={form.spouseNationality} onChange={e => update('spouseNationality', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
-              <input type="text" placeholder="State of Origin" value={form.spouseStateOfOrigin} onChange={e => update('spouseStateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
-              <input type="text" placeholder="LGA" value={form.spouseLGA} onChange={e => update('spouseLGA', e.target.value)} className="rounded-md border p-2 text-sm outline-none" />
+              <input type="tel" placeholder="Spouse Phone" value={form.spouseMobilePhone} onChange={e => update('spouseMobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+              <input type="text" placeholder="Spouse Nationality" value={form.spouseNationality} onChange={e => update('spouseNationality', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+              <input type="text" placeholder="State of Origin" value={form.spouseStateOfOrigin} onChange={e => update('spouseStateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+              <input type="text" placeholder="LGA" value={form.spouseLGA} onChange={e => update('spouseLGA', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
               <div className="md:col-span-2">
-                <textarea placeholder="Spouse Residential Address" value={form.spouseResidentialAddress} onChange={e => update('spouseResidentialAddress', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none" />
+                <textarea placeholder="Spouse Residential Address" value={form.spouseResidentialAddress} onChange={e => update('spouseResidentialAddress', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
               </div>
             </div>
           </div>
@@ -424,7 +456,11 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               <button 
                 type="button" 
                 onClick={handleNext} 
-                className="bg-green-600 text-white px-10 py-2.5 rounded-lg font-bold hover:bg-green-700 shadow-md active:scale-95 transition-all"
+                className={`px-10 py-2.5 rounded-lg font-bold shadow-md active:scale-95 transition-all ${
+                  (step === 2 && !form.hasSentEmailDocs) 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
               >
                 Continue
               </button>
