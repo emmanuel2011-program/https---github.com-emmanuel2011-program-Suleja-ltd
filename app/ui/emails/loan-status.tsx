@@ -23,32 +23,34 @@ export const LoanStatusEmail = ({
 }) => {
   let formattedDueDate = '';
   let formattedReminderDate = '';
+  let interestAmount = 0;
+  let totalRepayment = 0;
 
-  // Safety: Check if repaymentDate exists and is a string before splitting
+  if (status === 'approved' && amount) {
+    // Math: 15% Static Interest
+    interestAmount = Number(amount) * 0.15;
+    totalRepayment = Number(amount) + interestAmount;
+  }
+
   if (status === 'approved' && repaymentDate && typeof repaymentDate === 'string') {
     try {
       const datePart = repaymentDate.split('T')[0];
       const [year, month, day] = datePart.split('-').map(Number);
+      const actualDueDate = new Date(year, month - 1, day);
       
-      // Lock to local date to avoid UTC rollover
-      const actualDate = new Date(year, month - 1, day);
-      
-      const reminderDate = new Date(actualDate);
-      reminderDate.setDate(actualDate.getDate() - 1);
+      // Calculate the Reminder/Repay Message Date (D - 1)
+      const reminderDate = new Date(actualDueDate);
+      reminderDate.setDate(actualDueDate.getDate() - 1);
 
-      formattedDueDate = actualDate.toLocaleDateString('en-NG', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
+      formattedDueDate = actualDueDate.toLocaleDateString('en-NG', {
+        day: 'numeric', month: 'long', year: 'numeric'
       });
 
       formattedReminderDate = reminderDate.toLocaleDateString('en-NG', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
+        day: 'numeric', month: 'long', year: 'numeric'
       });
     } catch (e) {
-      console.error("Error formatting Status Date:", e);
+      console.error("Date calculation error", e);
     }
   }
 
@@ -56,39 +58,38 @@ export const LoanStatusEmail = ({
     <Html>
       <Body style={{ backgroundColor: '#f6f9fc', padding: '20px', fontFamily: 'sans-serif' }}>
         <Container style={{ backgroundColor: '#ffffff', border: '1px solid #e1e1e1', padding: '40px', borderRadius: '10px' }}>
-          <Heading style={{ color: status === 'approved' ? '#166534' : '#991b1b', fontSize: '24px' }}>
-            Loan Application {status === 'approved' ? 'Approved' : 'Rejected'}
+          <Heading style={{ color: status === 'approved' ? '#166534' : '#991b1b', fontSize: '22px' }}>
+            Loan Application Statement
           </Heading>
           
-          <Text style={{ fontSize: '16px', color: '#333' }}>Hello {firstName},</Text> 
-          
-          <Section>
-            <Text style={{ fontSize: '16px', color: '#333' }}>
-              Your application with <strong>SulejaHH Cooperative</strong> has been <strong>{status}</strong>.
-            </Text>
+          <Text>Hello {firstName}, Your loan has been <strong>{status}</strong>.</Text>
 
-            {status === 'approved' && amount && (
-              <Section style={{ backgroundColor: '#f9fafb', padding: '20px', borderRadius: '8px', margin: '24px 0', border: '1px solid #edf2f7' }}>
-                <Text style={{ fontWeight: 'bold' }}>Loan Details:</Text>
-                <Text>Amount: <strong>₦{Number(amount).toLocaleString('en-NG')}</strong></Text>
-                
-                {formattedDueDate && (
-                  <>
-                    <Text>Due Date: <strong>{formattedDueDate}</strong></Text>
-                    <Text style={{ color: '#166534', fontSize: '14px', marginTop: '10px' }}>
-                      * We will send you a reminder on <strong>{formattedReminderDate}</strong>.
-                    </Text>
-                  </>
-                )}
-              </Section>
-            )}
-          </Section>
+          {status === 'approved' && (
+            <Section style={{ backgroundColor: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #edf2f7' }}>
+              <Text style={{ fontWeight: 'bold', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>OFFICIAL STATEMENT</Text>
+              
+              <Text>Principal Amount: <strong>₦{Number(amount).toLocaleString('en-NG')}</strong></Text>
+              <Text>Interest Rate: <strong>15% (Static)</strong></Text>
+              <Text>Interest Amount: <strong>₦{interestAmount.toLocaleString('en-NG')}</strong></Text>
+              
+              <Hr style={{ borderColor: '#ddd' }} />
+              
+              <Text style={{ fontSize: '18px', color: '#1a365d' }}>
+                Total Repayment: <strong>₦{totalRepayment.toLocaleString('en-NG')}</strong>
+              </Text>
 
-          <Hr style={{ margin: '30px 0', borderColor: '#e1e1e1' }} />
-          <Section style={{ textAlign: 'center' as const }}>
-            <Text style={{ fontSize: '12px', color: '#a0aec0' }}>SulejaHH Multi-Purpose Co-operative Society</Text>
-            <Text style={{ fontSize: '12px', color: '#a0aec0' }}>Suleja, Niger State, Nigeria</Text>
-          </Section>
+              <Hr style={{ borderColor: '#ddd' }} />
+
+              <Text>Official Due Date: {formattedDueDate}</Text>
+              <Text style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                Repayment Reminder Date: {formattedReminderDate}
+              </Text>
+            </Section>
+          )}
+
+          <Text style={{ fontSize: '13px', marginTop: '20px', color: '#666' }}>
+            * Note: You will receive an automated repayment message on {formattedReminderDate}, exactly one day before your loan expires.
+          </Text>
         </Container>
       </Body>
     </Html>
