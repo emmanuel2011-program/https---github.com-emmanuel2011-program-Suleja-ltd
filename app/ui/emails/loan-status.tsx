@@ -79,7 +79,7 @@ export const LoanStatusEmail = ({
               <Text style={{ fontWeight: 'bold', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>OFFICIAL STATEMENT</Text>
               
               <Text>Principal Amount: <strong>₦{Number(amount).toLocaleString('en-NG')}</strong></Text>
-              <Text>Interest Rate: <strong>15% (Fixed)</strong></Text>
+              <Text>Interest Rate: <strong>15%</strong></Text>
               <Text>Interest Amount: <strong>₦{interestAmount.toLocaleString('en-NG')}</strong></Text>
               
               <Hr style={{ borderColor: '#ddd' }} />
