@@ -73,7 +73,7 @@ type FormState = {
   loanAmount: string;
   requestedDate: string;
   duration: string;
-  interest: string;
+  interest: string; // Will store "13" or "15"
   bankName: string;
   accountNumber: string;
   accountName: string;
@@ -90,7 +90,7 @@ type FormState = {
   spouseResidentialAddress: string;
   passportFile: File | null;
   idCardFile: File | null;
-  hasSentEmailDocs: boolean; // New Guard State
+  hasSentEmailDocs: boolean;
 };
 
 const initialFormState: FormState = {
@@ -108,7 +108,7 @@ const initialFormState: FormState = {
   loanAmount: '',
   requestedDate: '',
   duration: '1 Month',
-  interest: '15% Monthly',
+  interest: '15', // DEFAULT TO 15
   bankName: '',
   accountNumber: '',
   accountName: '',
@@ -197,9 +197,11 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
 
       formData.append('repaymentDate', finalRepaymentDate);
       
+      // --- DYNAMIC INTEREST CALCULATION ---
       const principal = Number(form.loanAmount);
-      const totalInterest = principal * 0.15;
-      formData.append('calculatedInterest', totalInterest.toString());
+      const selectedRate = Number(form.interest) / 100;
+      const calculatedInterestAmount = principal * selectedRate;
+      formData.append('calculatedInterest', calculatedInterestAmount.toString());
 
       if (form.passportFile) {
         const compressed = await compressImage(form.passportFile);
@@ -273,7 +275,6 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
                 </div>
               </div>
 
-              {/* DOCUMENT SUBMISSION GUARD */}
               <div className="mt-4 pt-4 border-t border-green-200">
                  <label className="flex items-center gap-3 cursor-pointer group">
                     <input 
@@ -302,10 +303,20 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Repayment Duration</label>
                 <div className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-gray-600">1 Month</div>
                </div>
+               
+               {/* --- DYNAMIC INTEREST DROPDOWN --- */}
                <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Interest Rate</label>
-                <div className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-green-700">15% Monthly</div>
+                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Interest Rate *</label>
+                <select 
+                  value={form.interest} 
+                  onChange={e => update('interest', e.target.value)} 
+                  className="w-full rounded-md border p-2 text-sm font-bold text-green-700 bg-white outline-none focus:ring-1 focus:ring-green-500"
+                >
+                  <option value="15">15% Monthly</option>
+                  <option value="13">13% Monthly</option>
+                </select>
                </div>
+
                <div className="md:col-span-2">
                 <textarea placeholder="Purpose of Loan *" value={form.purposeOfLoan} onChange={e => update('purposeOfLoan', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               </div>
@@ -396,10 +407,15 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Applicant:</span> <span>{form.firstName} {form.surname}</span></div>
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Amount:</span> <span className="font-bold text-green-700">₦{Number(form.loanAmount).toLocaleString()}</span></div>
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Duration:</span> <span>1 Month</span></div>
+              
+              {/* --- DYNAMIC TOTAL CALCULATION --- */}
               <div className="flex justify-between border-b pb-1">
-                <span className="text-gray-500">Estimated Total Due:</span> 
-                <span className="font-bold text-red-600">₦{(Number(form.loanAmount) * 1.15).toLocaleString()}</span>
+                <span className="text-gray-500">Estimated Total Due ({form.interest}%):</span> 
+                <span className="font-bold text-red-600">
+                  ₦{(Number(form.loanAmount) * (1 + Number(form.interest)/100)).toLocaleString()}
+                </span>
               </div>
+              
               <div className="flex justify-between"><span className="text-gray-500">Documents:</span> <span className="text-green-600 font-medium">Ready for Upload</span></div>
             </div>
           </div>
