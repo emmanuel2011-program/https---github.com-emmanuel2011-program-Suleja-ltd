@@ -67,7 +67,7 @@ export const LoanReminderEmail = ({
       <p>Hello <strong>{firstName}</strong>,</p>
       
       <p>
-        This is an automated notification from <strong>SulejaHH Cooperative</strong>. 
+        This is an automated notification from <strong>SulejaHH MCoop</strong>. 
         Your loan cycle is expiring <strong>tomorrow</strong>.
       </p>
 
