@@ -7,11 +7,9 @@ import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
-// Import your new status template
 import { LoanStatusEmail } from '@/app/ui/emails/loan-status'; 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-// Set your admin email for monitoring
 const ADMIN_EMAIL = 'admin@shhmcsoc.me'; 
 
 /**
@@ -68,20 +66,6 @@ export async function createMembership(formData: FormData) {
       )
     `;
 
-    if (process.env.RESEND_API_KEY) {
-      try {
-        await resend.emails.send({
-          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
-          to: [rawFormData.email],
-          subject: 'Welcome to the Cooperative!',
-          html: `<h1>Welcome, ${rawFormData.firstName}!</h1><p>Your registration was successful.</p>`,
-          text: `Welcome, ${rawFormData.firstName}! Your registration at SulejaHH Cooperative was successful.`,
-        });
-      } catch (e) {
-        console.error('Membership Email failed to send:', e);
-      }
-    }
-
     revalidatePath('/membership');
     return { success: true };
   } catch (error: any) {
@@ -107,7 +91,6 @@ export async function createLoan(prevState: any, formData: FormData) {
   const title = (formData.get('title') as string) || 'Mr/Ms';
   const tin = toNull(formData.get('tin') as string);
   const residentialAddress = formData.get('residentialAddress') as string;
-
   const loanAmount = formData.get('loanAmount') as string;
   const duration = formData.get('duration') as string;
   const interest = formData.get('interest') as string;
@@ -116,8 +99,6 @@ export async function createLoan(prevState: any, formData: FormData) {
   const accountName = formData.get('accountName') as string;
   const accountType = (formData.get('accountType') as string) || 'Savings';
   const purposeOfLoan = formData.get('purposeOfLoan') as string;
-  
-  // 1. CAPTURE THE MANUAL REQUESTED DATE
   const requestedDate = toNull(formData.get('requestedDate') as string) || new Date().toISOString().split('T')[0];
 
   let repaymentDate = toNull(formData.get('repaymentDate') as string);
@@ -126,16 +107,6 @@ export async function createLoan(prevState: any, formData: FormData) {
       fallback.setDate(fallback.getDate() + 30);
       repaymentDate = fallback.toISOString().split('T')[0];
   }
-
-  const spouseTitle = toNull(formData.get('spouseTitle') as string);
-  const spouseName = toNull(formData.get('spouseName') as string);
-  const spouseMobilePhone = toNull(formData.get('spouseMobilePhone') as string);
-  const spouseDOB = toNull(formData.get('spouseDOB') as string);
-  const spouseGender = toNull(formData.get('spouseGender') as string);
-  const spouseStateOfOrigin = toNull(formData.get('spouseStateOfOrigin') as string);
-  const spouseLGA = toNull(formData.get('spouseLGA') as string);
-  const spouseNationality = toNull(formData.get('spouseNationality') as string);
-  const spouseResidentialAddress = toNull(formData.get('spouseResidentialAddress') as string);
 
   try {
     let passportUrl = null;
@@ -173,20 +144,18 @@ export async function createLoan(prevState: any, formData: FormData) {
         member_id, surname, first_name, email, mobile_phone, date_of_birth,
         tin, loan_amount, duration, interest, bank_name, account_number, 
         account_name, account_type, purpose_of_loan, repayment_date,
-        spouse_name, spouse_mobile_phone, spouse_dob, spouse_title, spouse_gender,
-        spouse_state_of_origin, spouse_lga, spouse_nationality, spouse_residential_address,
         passport_url, id_card_url, status, request_date, gender, residential_address
       )
       VALUES (
         ${memberId}, ${surname}, ${firstName}, ${email}, ${mobilePhone}, ${dateOfBirth},
         ${tin}, ${parseFloat(loanAmount)}, ${duration}, ${interest}, ${bankName}, ${accountNumber}, 
         ${accountName}, ${accountType}, ${purposeOfLoan}, ${repaymentDate},
-        ${spouseName}, ${spouseMobilePhone}, ${spouseDOB}, ${spouseTitle}, ${spouseGender},
-        ${spouseStateOfOrigin}, ${spouseLGA}, ${spouseNationality}, ${spouseResidentialAddress},
         ${passportUrl}, ${idCardUrl}, 'pending', ${requestedDate}, ${gender}, ${residentialAddress}
       )
     `;
 
+    // --- SILENCED: LOAN APPLICATION CONFIRMATION EMAIL ---
+    /*
     if (process.env.RESEND_API_KEY) {
       try {
         await resend.emails.send({
@@ -197,9 +166,10 @@ export async function createLoan(prevState: any, formData: FormData) {
           react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
         });
       } catch (emailError) {
-        console.error('Email Render/Send failure:', emailError);
+        console.error('Confirmation Email failed:', emailError);
       }
     }
+    */
 
     revalidatePath('/dashboard/loans');
     revalidatePath('/'); 
@@ -234,6 +204,8 @@ export async function updateLoanStatus(
 
     if (process.env.RESEND_API_KEY) {
       try {
+        // --- SILENCED: LOAN STATUS STATUS EMAIL ---
+        /*
         await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [applicantEmail],
@@ -245,14 +217,35 @@ export async function updateLoanStatus(
             repaymentDate: loanDetails?.repayment_date
           }), 
         });
+        */
+
+        // --- ACTIVE: REPAYMENT REMINDER EMAIL ---
+        // This only sends if the status is approved
+        if (newStatus === 'approved') {
+          await resend.emails.send({
+            from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+            to: [applicantEmail],
+            subject: 'Important: Your Loan Repayment Reminder',
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <h2 style="color: #15803d;">Repayment Schedule Active</h2>
+                <p>Hello <strong>${firstName}</strong>,</p>
+                <p>This is a reminder that your loan repayment of <strong>₦${(loanDetails?.loan_amount * 1.15).toLocaleString()}</strong> (including interest) is due on:</p>
+                <div style="background: #f0fdf4; padding: 15px; border-radius: 6px; text-align: center; font-size: 1.25rem; font-weight: bold; color: #166534;">
+                  ${loanDetails?.repayment_date}
+                </div>
+                <p style="margin-top: 20px; font-size: 0.875rem; color: #6b7280;">Please ensure your account is funded or transfer to the cooperative account before this date.</p>
+              </div>
+            `,
+          });
+        }
       } catch (emailErr) {
-        console.error('Email sending failed:', emailErr);
+        console.error('Reminder email failed:', emailErr);
       }
     }
 
     revalidatePath('/dashboard/loans');
     revalidatePath('/'); 
-    
     return { success: true };
   } catch (error) {
     console.error('Failed to update status:', error);
@@ -269,11 +262,10 @@ export async function fetchAllMembers() {
       SELECT id, title, first_name, surname, email, mobile_phone, residential_address, nationality, passport_url, id_card_url
       FROM memberships
       ORDER BY surname ASC`;
-
     return data.rows;
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch the membership directory.');
+    throw new Error('Failed to fetch membership directory.');
   }
 }
 
@@ -285,13 +277,13 @@ export async function getPendingCount() {
     const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
     return Number(data.rows[0].count);
   } catch (error) {
-    console.error('Error fetching pending count:', error);
+    console.error('Error:', error);
     return 0;
   }
 }
 
 /**
- * Fetch pending loans for client action
+ * Fetch pending loans for admin dashboard
  */
 export async function getPendingLoansAction() {
   try {
