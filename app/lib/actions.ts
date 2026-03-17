@@ -1,3 +1,4 @@
+
 'use server';
 
 import { signIn } from '@/auth';
@@ -6,11 +7,16 @@ import { sql } from '@vercel/postgres';
 import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
-import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
-import { LoanStatusEmail } from '@/app/ui/emails/loan-status'; 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = 'admin@shhmcsoc.me'; 
+
+/**
+ * Helper to extract months from duration string (e.g., "3 Months" -> 3)
+ */
+const getMonthsFromDuration = (duration: string): number => {
+  const months = parseInt(duration);
+  return isNaN(months) ? 1 : months;
+};
 
 /**
  * Action to handle User Login
@@ -35,43 +41,98 @@ export async function authenticate(
 }
 
 /**
- * Action to create a new Membership
+ * Action to create a new Membership (Handles File Uploads & Optional Investments)
  */
 export async function createMembership(formData: FormData) {
-  const rawFormData = {
-    surname: formData.get('surname') as string,
-    firstName: formData.get('firstName') as string,
-    middleName: (formData.get('middleName') as string) || null,
-    title: (formData.get('title') as string) || 'Mr/Ms',
-    dateOfBirth: formData.get('dateOfBirth') as string,
-    gender: (formData.get('gender') as string) || 'Not Specified',
-    nationality: (formData.get('nationality') as string) || 'Nigerian',
-    email: formData.get('email') as string,
-    mobilePhone: formData.get('mobilePhone') as string,
-    residentialAddress: formData.get('residentialAddress') as string,
-    tin: (formData.get('tin') as string) || null,
-  };
-
   try {
-    await sql`
+    // 1. Handle File Uploads
+    let passportUrl = null;
+    let idCardUrl = null;
+
+    const passportFile = formData.get('passportFile') as File;
+    const idCardFile = formData.get('idCardFile') as File;
+
+    if (passportFile && passportFile.size > 0) {
+      const blob = await put(`passports/${Date.now()}-${passportFile.name}`, passportFile, { access: 'public' });
+      passportUrl = blob.url;
+    }
+
+    if (idCardFile && idCardFile.size > 0) {
+      const blob = await put(`ids/${Date.now()}-${idCardFile.name}`, idCardFile, { access: 'public' });
+      idCardUrl = blob.url;
+    }
+
+    // 2. Insert Membership Data
+    const membershipResult = await sql`
       INSERT INTO memberships (
         title, surname, first_name, middle_name, date_of_birth, 
-        gender, nationality, email, mobile_phone, residential_address, tin
+        gender, nationality, email, mobile_phone, residential_address, 
+        tin, passport_url, id_card_url
       )
       VALUES (
-        ${rawFormData.title}, ${rawFormData.surname}, ${rawFormData.firstName}, 
-        ${rawFormData.middleName}, ${rawFormData.dateOfBirth}, ${rawFormData.gender},
-        ${rawFormData.nationality}, ${rawFormData.email}, ${rawFormData.mobilePhone}, 
-        ${rawFormData.residentialAddress}, ${rawFormData.tin}
+        ${formData.get('title') as string || 'Mr/Ms'}, 
+        ${formData.get('surname') as string}, 
+        ${formData.get('firstName') as string}, 
+        ${formData.get('middleName') as string || null}, 
+        ${formData.get('dateOfBirth') as string}, 
+        ${formData.get('gender') as string || 'Not Specified'},
+        ${formData.get('nationality') as string || 'Nigerian'}, 
+        ${formData.get('email') as string}, 
+        ${formData.get('mobilePhone') as string}, 
+        ${formData.get('residentialAddress') as string}, 
+        ${formData.get('tin') as string || null},
+        ${passportUrl},
+        ${idCardUrl}
       )
+      RETURNING id
     `;
 
+    const memberId = membershipResult.rows[0].id;
+    const email = formData.get('email') as string;
+
+    // 3. Handle Conditional Investment
+    const amountStr = formData.get('amountToInvest');
+    if (amountStr && parseFloat(amountStr.toString()) > 0) {
+      const amount = parseFloat(amountStr.toString());
+      const duration = (formData.get('duration') as string) || '1 Month (Renewable)';
+      
+      // Calculate Total Interest: Amount * 7% * Number of Months
+      const months = getMonthsFromDuration(duration);
+      const totalInterest = amount * 0.07 * months;
+      
+      let receiptUrl = null;
+      const receiptFile = formData.get('paymentReceipt') as File;
+      if (receiptFile && receiptFile.size > 0) {
+        const blob = await put(`receipts/${Date.now()}-${receiptFile.name}`, receiptFile, { access: 'public' });
+        receiptUrl = blob.url;
+      }
+
+      await sql`
+        INSERT INTO investments (
+          member_id, member_email, amount, monthly_interest, 
+          bank_name, account_number, account_name, receipt_url, status,
+          contract_accepted, duration, account_class
+        )
+        VALUES (
+          ${memberId}, ${email}, ${amount}, ${totalInterest}, 
+          ${formData.get('bankName') as string}, 
+          ${formData.get('accountNumber') as string},
+          ${formData.get('accountName') as string},
+          ${receiptUrl}, 'pending',
+          ${formData.get('contractNotice') === 'on'},
+          ${duration}, 'Investment'
+        )
+      `;
+    }
+
+    revalidatePath('/dashboard/memberships');
     revalidatePath('/membership');
     return { success: true };
+
   } catch (error: any) {
-    console.error('Membership Database Error:', error);
+    console.error('Membership Error:', error);
     if (error.code === '23505') return { success: false, message: 'Email already registered.' };
-    return { success: false, message: 'Database Error.' };
+    return { success: false, message: 'Database Error: ' + error.message };
   }
 }
 
@@ -154,23 +215,6 @@ export async function createLoan(prevState: any, formData: FormData) {
       )
     `;
 
-    // --- SILENCED: LOAN APPLICATION CONFIRMATION EMAIL ---
-    /*
-    if (process.env.RESEND_API_KEY) {
-      try {
-        await resend.emails.send({
-          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
-          to: [email],
-          subject: 'Loan Application Received',
-          text: `Hello ${firstName}, your loan application for ₦${loanAmount} has been received.`,
-          react: LoanConfirmationEmail({ firstName, loanAmount, duration }),
-        });
-      } catch (emailError) {
-        console.error('Confirmation Email failed:', emailError);
-      }
-    }
-    */
-
     revalidatePath('/dashboard/loans');
     revalidatePath('/'); 
     return { success: true, message: 'Application submitted successfully!' };
@@ -202,50 +246,25 @@ export async function updateLoanStatus(
       WHERE id = ${loanId}
     `;
 
-    if (process.env.RESEND_API_KEY) {
+    if (newStatus === 'approved' && process.env.RESEND_API_KEY) {
       try {
-        // --- SILENCED: LOAN STATUS STATUS EMAIL ---
-        /*
         await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [applicantEmail],
-          subject: `Loan Application Status: ${newStatus.toUpperCase()}`,
-          react: LoanStatusEmail({ 
-            firstName, 
-            status: newStatus,
-            amount: loanDetails?.loan_amount,
-            repaymentDate: loanDetails?.repayment_date
-          }), 
+          subject: 'Important: Your Loan Repayment Reminder',
+          html: `
+            <div style="font-family: sans-serif; padding: 20px;">
+              <h2 style="color: #15803d;">Repayment Schedule Active</h2>
+              <p>Hello ${firstName}, your loan repayment of ₦${(loanDetails?.loan_amount * 1.15).toLocaleString()} is due on ${loanDetails?.repayment_date}.</p>
+            </div>
+          `,
         });
-        */
-
-        // --- ACTIVE: REPAYMENT REMINDER EMAIL ---
-        // This only sends if the status is approved
-        if (newStatus === 'approved') {
-          await resend.emails.send({
-            from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
-            to: [applicantEmail],
-            subject: 'Important: Your Loan Repayment Reminder',
-            html: `
-              <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                <h2 style="color: #15803d;">Repayment Schedule Active</h2>
-                <p>Hello <strong>${firstName}</strong>,</p>
-                <p>This is a reminder that your loan repayment of <strong>₦${(loanDetails?.loan_amount * 1.15).toLocaleString()}</strong> (including interest) is due on:</p>
-                <div style="background: #f0fdf4; padding: 15px; border-radius: 6px; text-align: center; font-size: 1.25rem; font-weight: bold; color: #166534;">
-                  ${loanDetails?.repayment_date}
-                </div>
-                <p style="margin-top: 20px; font-size: 0.875rem; color: #6b7280;">Please ensure your account is funded or transfer to the cooperative account before this date.</p>
-              </div>
-            `,
-          });
-        }
       } catch (emailErr) {
-        console.error('Reminder email failed:', emailErr);
+        console.error('Email failed:', emailErr);
       }
     }
 
     revalidatePath('/dashboard/loans');
-    revalidatePath('/'); 
     return { success: true };
   } catch (error) {
     console.error('Failed to update status:', error);
@@ -277,23 +296,116 @@ export async function getPendingCount() {
     const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
     return Number(data.rows[0].count);
   } catch (error) {
-    console.error('Error:', error);
     return 0;
   }
 }
 
 /**
- * Fetch pending loans for admin dashboard
+ * Fetch all loans for the dashboard
  */
 export async function getPendingLoansAction() {
   try {
-    const { rows } = await sql`
+    const data = await sql`
       SELECT * FROM loan_applications 
-      WHERE status = 'pending' 
-      ORDER BY request_date DESC`;
-    return rows;
+      ORDER BY request_date DESC
+    `;
+    return data.rows;
   } catch (error) {
-    console.error('Failed to fetch loans:', error);
-    return [];
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch loans.');
+  }
+}
+
+/**
+ * Fetch all investments with member names and bank info
+ */
+export async function fetchInvestments() {
+  try {
+    const data = await sql`
+      SELECT 
+        i.*,
+        m.first_name,
+        m.surname
+      FROM investments i
+      JOIN memberships m ON i.member_id = m.id
+      ORDER BY i.created_at DESC
+    `;
+    return data.rows;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch investments.');
+  }
+}
+
+/**
+ * Action to create an Investment for an existing member (Standalone Form)
+ */
+export async function createInvestment(formData: FormData) {
+  const email = formData.get('email') as string;
+  const amountToInvest = Number(formData.get('amountToInvest'));
+  const duration = (formData.get('investmentDuration') as string);
+  
+  // Calculate total interest based on duration
+  const months = getMonthsFromDuration(duration);
+  const totalInterest = amountToInvest * 0.07 * months;
+
+  try {
+    // 1. Find member
+    const memberResult = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
+    if (memberResult.rows.length === 0) {
+      return { success: false, message: 'No member found with this email.' };
+    }
+    const memberId = memberResult.rows[0].id;
+
+    // 2. Handle Receipt Upload
+    let receiptUrl = null;
+    const receiptFile = formData.get('paymentReceipt') as File;
+    if (receiptFile && receiptFile.size > 0) {
+      const blob = await put(`receipts/${Date.now()}-${receiptFile.name}`, receiptFile, { access: 'public' });
+      receiptUrl = blob.url;
+    }
+
+    // 3. Insert Investment
+    await sql`
+      INSERT INTO investments (
+        member_id, member_email, amount, monthly_interest, 
+        duration, bank_name, account_number, account_name, account_class, 
+        contract_accepted, receipt_url, status
+      )
+      VALUES (
+        ${memberId}, ${email}, ${amountToInvest}, ${totalInterest}, 
+        ${duration}, 
+        ${formData.get('bankName') as string}, 
+        ${formData.get('accountNumber') as string}, 
+        ${formData.get('accountName') as string}, 
+        ${formData.get('accountClass') as string || 'Investment'},
+        ${formData.get('contractNotice') === 'on'},
+        ${receiptUrl}, 'pending'
+      )
+    `;
+
+    revalidatePath('/dashboard/investments');
+    return { success: true, message: 'Investment successfully recorded!' };
+  } catch (error: any) {
+    console.error('Investment Database Error:', error);
+    return { success: false, message: 'Database Error: ' + error.message };
+  }
+}
+
+/**
+ * Action to Approve an Investment
+ */
+export async function approveInvestment(investmentId: string) {
+  try {
+    await sql`
+      UPDATE investments 
+      SET status = 'active' 
+      WHERE id = ${investmentId}
+    `;
+    revalidatePath('/dashboard/investments');
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to approve investment:', error);
+    return { success: false, message: 'Failed to approve.' };
   }
 }
