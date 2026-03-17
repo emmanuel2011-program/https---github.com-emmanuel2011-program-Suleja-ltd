@@ -1,4 +1,3 @@
-
 'use server';
 
 import { signIn } from '@/auth';
@@ -41,7 +40,7 @@ export async function authenticate(
 }
 
 /**
- * Action to create a new Membership (Handles File Uploads & Optional Investments)
+ * Action to create a new Membership (Handles File Uploads, Investments, & Welcome Email)
  */
 export async function createMembership(formData: FormData) {
   try {
@@ -89,14 +88,13 @@ export async function createMembership(formData: FormData) {
 
     const memberId = membershipResult.rows[0].id;
     const email = formData.get('email') as string;
+    const firstName = formData.get('firstName') as string;
 
     // 3. Handle Conditional Investment
     const amountStr = formData.get('amountToInvest');
     if (amountStr && parseFloat(amountStr.toString()) > 0) {
       const amount = parseFloat(amountStr.toString());
       const duration = (formData.get('duration') as string) || '1 Month (Renewable)';
-      
-      // Calculate Total Interest: Amount * 7% * Number of Months
       const months = getMonthsFromDuration(duration);
       const totalInterest = amount * 0.07 * months;
       
@@ -120,9 +118,31 @@ export async function createMembership(formData: FormData) {
           ${formData.get('accountName') as string},
           ${receiptUrl}, 'pending',
           ${formData.get('contractNotice') === 'on'},
-          ${duration}, 'Investment'
+          ${duration}, 
+          ${formData.get('accountClass') as string || 'Investment'}
         )
       `;
+
+      // 4. RESTORED: Welcome & Confirmation Email
+      if (process.env.RESEND_API_KEY) {
+        try {
+          await resend.emails.send({
+            from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+            to: [email],
+            subject: 'Welcome to SulejaHH - Investment Received',
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                <h2 style="color: #16a34a;">Welcome, ${firstName}!</h2>
+                <p>Your membership profile has been created successfully.</p>
+                <p>We have received your investment of <strong>₦${amount.toLocaleString()}</strong>.</p>
+                <p>Your account is currently <strong>Pending Verification</strong>. You will receive an update once an administrator activates your investment.</p>
+                <br />
+                <p>Regards,<br/>SulejaHH Management</p>
+              </div>
+            `,
+          });
+        } catch (e) { console.error('Email Error:', e); }
+      }
     }
 
     revalidatePath('/dashboard/memberships');
@@ -226,7 +246,7 @@ export async function createLoan(prevState: any, formData: FormData) {
 }
 
 /**
- * Action to Approve or Reject a Loan
+ * Action to Approve or Reject a Loan with RESTORED Status Email
  */
 export async function updateLoanStatus(
   loanId: string, 
@@ -246,22 +266,31 @@ export async function updateLoanStatus(
       WHERE id = ${loanId}
     `;
 
-    if (newStatus === 'approved' && process.env.RESEND_API_KEY) {
+    // RESTORED: Approval / Rejection Emails
+    if (process.env.RESEND_API_KEY) {
       try {
-        await resend.emails.send({
-          from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
-          to: [applicantEmail],
-          subject: 'Important: Your Loan Repayment Reminder',
-          html: `
-            <div style="font-family: sans-serif; padding: 20px;">
-              <h2 style="color: #15803d;">Repayment Schedule Active</h2>
-              <p>Hello ${firstName}, your loan repayment of ₦${(loanDetails?.loan_amount * 1.15).toLocaleString()} is due on ${loanDetails?.repayment_date}.</p>
-            </div>
-          `,
-        });
-      } catch (emailErr) {
-        console.error('Email failed:', emailErr);
-      }
+        if (newStatus === 'approved') {
+          await resend.emails.send({
+            from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+            to: [applicantEmail],
+            subject: 'Loan Approved - Repayment Schedule',
+            html: `
+              <div style="font-family: sans-serif; padding: 20px;">
+                <h2 style="color: #15803d;">Loan Approved!</h2>
+                <p>Hello ${firstName}, your loan application has been approved.</p>
+                <p>Your total repayment of <strong>₦${(loanDetails?.loan_amount * 1.15).toLocaleString()}</strong> is due on <strong>${loanDetails?.repayment_date}</strong>.</p>
+              </div>
+            `,
+          });
+        } else {
+          await resend.emails.send({
+            from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
+            to: [applicantEmail],
+            subject: 'Loan Application Update',
+            html: `<p>Hello ${firstName}, unfortunately your loan application was not approved at this time.</p>`,
+          });
+        }
+      } catch (emailErr) { console.error('Email failed:', emailErr); }
     }
 
     revalidatePath('/dashboard/loans');
@@ -317,15 +346,15 @@ export async function getPendingLoansAction() {
 }
 
 /**
- * Fetch all investments with member names and bank info
+ * Fetch all investments (Updated to explicitly fetch Account Name/Class)
  */
 export async function fetchInvestments() {
   try {
     const data = await sql`
       SELECT 
-        i.*,
-        m.first_name,
-        m.surname
+        i.id, i.amount, i.monthly_interest, i.duration, i.status, 
+        i.bank_name, i.account_number, i.account_name, i.account_class, i.created_at,
+        m.first_name, m.surname
       FROM investments i
       JOIN memberships m ON i.member_id = m.id
       ORDER BY i.created_at DESC
@@ -345,19 +374,16 @@ export async function createInvestment(formData: FormData) {
   const amountToInvest = Number(formData.get('amountToInvest'));
   const duration = (formData.get('investmentDuration') as string);
   
-  // Calculate total interest based on duration
   const months = getMonthsFromDuration(duration);
   const totalInterest = amountToInvest * 0.07 * months;
 
   try {
-    // 1. Find member
     const memberResult = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
     if (memberResult.rows.length === 0) {
       return { success: false, message: 'No member found with this email.' };
     }
     const memberId = memberResult.rows[0].id;
 
-    // 2. Handle Receipt Upload
     let receiptUrl = null;
     const receiptFile = formData.get('paymentReceipt') as File;
     if (receiptFile && receiptFile.size > 0) {
@@ -365,7 +391,6 @@ export async function createInvestment(formData: FormData) {
       receiptUrl = blob.url;
     }
 
-    // 3. Insert Investment
     await sql`
       INSERT INTO investments (
         member_id, member_email, amount, monthly_interest, 
