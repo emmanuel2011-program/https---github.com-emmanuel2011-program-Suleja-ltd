@@ -123,7 +123,7 @@ export async function createMembership(formData: FormData) {
         )
       `;
 
-      // 4. RESTORED: Welcome & Confirmation Email
+      // 4. Welcome & Confirmation Email
       if (process.env.RESEND_API_KEY) {
         try {
           await resend.emails.send({
@@ -246,7 +246,7 @@ export async function createLoan(prevState: any, formData: FormData) {
 }
 
 /**
- * Action to Approve or Reject a Loan with RESTORED Status Email
+ * Action to Approve or Reject a Loan
  */
 export async function updateLoanStatus(
   loanId: string, 
@@ -266,7 +266,7 @@ export async function updateLoanStatus(
       WHERE id = ${loanId}
     `;
 
-    // RESTORED: Approval / Rejection Emails
+    // Approval / Rejection Emails
     if (process.env.RESEND_API_KEY) {
       try {
         if (newStatus === 'approved') {
@@ -330,23 +330,24 @@ export async function getPendingCount() {
 }
 
 /**
- * Fetch all loans for the dashboard
+ * UPDATED: Fetch ONLY pending loans for the dashboard
  */
 export async function getPendingLoansAction() {
   try {
     const data = await sql`
       SELECT * FROM loan_applications 
+      WHERE status = 'pending'
       ORDER BY request_date DESC
     `;
     return data.rows;
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch loans.');
+    throw new Error('Failed to fetch pending loans.');
   }
 }
 
 /**
- * Fetch all investments (Updated to explicitly fetch Account Name/Class)
+ * Fetch all investments
  */
 export async function fetchInvestments() {
   try {
@@ -367,7 +368,7 @@ export async function fetchInvestments() {
 }
 
 /**
- * Action to create an Investment for an existing member (Standalone Form)
+ * Action to create an Investment for an existing member
  */
 export async function createInvestment(formData: FormData) {
   const email = formData.get('email') as string;
