@@ -89,7 +89,9 @@ export async function createMembership(formData: FormData) {
       INSERT INTO memberships (
         title, surname, first_name, middle_name, date_of_birth, 
         gender, nationality, email, mobile_phone, residential_address, 
-        tin, passport_url, id_card_url
+        tin, passport_url, id_card_url,
+        spouse_name, spouse_phone, spouse_dob, spouse_gender,
+        spouse_nationality, spouse_state, spouse_lga, spouse_address, spouse_title
       )
       VALUES (
         ${formData.get('title') as string || 'Mr/Ms'}, 
@@ -104,7 +106,16 @@ export async function createMembership(formData: FormData) {
         ${formData.get('residentialAddress') as string}, 
         ${formData.get('tin') as string || null},
         ${passportUrl},
-        ${idCardUrl}
+        ${idCardUrl},
+        ${formData.get('spouseName') as string || null},
+        ${formData.get('spouseMobilePhone') as string || null},
+        ${formData.get('spouseDOB') as string || null},
+        ${formData.get('spouseGender') as string || null},
+        ${formData.get('spouseNationality') as string || null},
+        ${formData.get('spouseStateOfOrigin') as string || null},
+        ${formData.get('spouseLGA') as string || null},
+        ${formData.get('spouseResidentialAddress') as string || null},
+        ${formData.get('spouseTitle') as string || null}
       )
       RETURNING id
     `;
@@ -150,8 +161,6 @@ export async function createMembership(formData: FormData) {
  * ACTION: Create Loan Application
  */
 export async function createLoan(prevState: any, formData: FormData) {
-  const toNull = (val: string | null) => (val && val.trim() !== '' ? val : null);
-  
   try {
     const email = formData.get('email') as string;
     const surname = formData.get('surname') as string;
@@ -161,7 +170,6 @@ export async function createLoan(prevState: any, formData: FormData) {
     const residentialAddress = formData.get('residentialAddress') as string;
     const dateOfBirth = formData.get('dateOfBirth') as string;
     
-    // Safety Fallbacks for required columns
     const gender = (formData.get('gender') as string) || 'Not Specified';
     const nationality = (formData.get('nationality') as string) || 'Nigerian';
     const accountType = (formData.get('accountType') as string) || 'Savings';
@@ -169,13 +177,10 @@ export async function createLoan(prevState: any, formData: FormData) {
     const interest = (formData.get('interest') as string) || '15%';
     const loanAmount = parseFloat(formData.get('loanAmount') as string) || 0;
 
-    // --- REPAYMENT DATE FIX ---
-    // If no date is picked, default to 30 days from now
     const defaultDate = new Date();
     defaultDate.setDate(defaultDate.getDate() + 30);
     const fallbackDate = defaultDate.toISOString().split('T')[0];
     const repaymentDate = formData.get('repaymentDate') as string || fallbackDate;
-    // ---------------------------
 
     const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
     const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
@@ -201,7 +206,9 @@ export async function createLoan(prevState: any, formData: FormData) {
         passport_url, id_card_url, status, request_date, residential_address,
         date_of_birth, gender, nationality,
         guarantor_name, guarantor_phone, guarantor_relationship, guarantor_workplace,
-        guarantor_passport_url, guarantor_id_url
+        guarantor_passport_url, guarantor_id_url,
+        spouse_title, spouse_name, spouse_phone, spouse_dob, 
+        spouse_gender, spouse_nationality, spouse_state, spouse_lga, spouse_address
       )
       VALUES (
         ${memberId}, ${surname}, ${firstName}, ${middleName}, ${email}, ${mobilePhone},
@@ -211,7 +218,7 @@ export async function createLoan(prevState: any, formData: FormData) {
         ${formData.get('accountName') as string || (firstName + ' ' + surname)}, 
         ${accountType},
         ${formData.get('purposeOfLoan') as string || 'General'}, 
-        ${repaymentDate}, -- Using the calculated fallback date
+        ${repaymentDate}, 
         ${passportUrl}, ${idCardUrl}, 'pending', 
         ${new Date().toISOString().split('T')[0]}, 
         ${residentialAddress},
@@ -222,9 +229,27 @@ export async function createLoan(prevState: any, formData: FormData) {
         ${formData.get('guarantorPhone') as string || 'N/A'}, 
         ${formData.get('guarantorRelationship') as string || 'N/A'},
         ${formData.get('guarantorWorkplace') as string || 'N/A'},
-        ${gPassportUrl}, ${gIdUrl}
+        ${gPassportUrl}, ${gIdUrl},
+        ${formData.get('spouseTitle') as string || null},
+        ${formData.get('spouseName') as string || null},
+        ${formData.get('spouseMobilePhone') as string || null},
+        ${formData.get('spouseDOB') as string || null},
+        ${formData.get('spouseGender') as string || null},
+        ${formData.get('spouseNationality') as string || null},
+        ${formData.get('spouseStateOfOrigin') as string || null},
+        ${formData.get('spouseLGA') as string || null},
+        ${formData.get('spouseResidentialAddress') as string || null}
       )
     `;
+
+    try {
+      await resend.emails.send({
+        from: 'Support <onboarding@resend.dev>',
+        to: [email],
+        subject: 'Loan Application Received',
+        html: `<p>Hi ${firstName}, your loan application for ₦${loanAmount.toLocaleString()} has been received.</p>`
+      });
+    } catch (e) { console.error("Email failed:", e); }
 
     revalidatePath('/dashboard/loans');
     revalidatePath('/dashboard/guarantors');
@@ -234,16 +259,15 @@ export async function createLoan(prevState: any, formData: FormData) {
     return { success: false, message: `System Error: ${error.message}` };
   }
 }
+
 /**
  * ADMIN FETCHERS & HELPERS
  */
-
 export async function getPendingCount(): Promise<number> {
   try {
     const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
     return Number(data.rows[0].count) || 0;
   } catch (error) {
-    console.error('Failed to fetch pending count:', error);
     return 0;
   }
 }
@@ -253,52 +277,30 @@ export async function getPendingLoansAction() {
   return data.rows;
 }
 
-/**
- * ACTION: Update Loan Status (Approve/Reject)
- */
-// Update the function signature in your actions.ts
 export async function updateLoanStatus(
   loanId: string, 
-  status: 'active' | 'rejected' | 'pending' | 'approved', // Added 'approved' to match your page
-  email?: string,      // Optional argument
-  firstName?: string   // Optional argument
+  status: 'active' | 'rejected' | 'pending' | 'approved',
+  email?: string,      
+  firstName?: string   
 ) {
   try {
-    // 1. Update the database
-    await sql`
-      UPDATE loan_applications 
-      SET status = ${status} 
-      WHERE id = ${loanId}
-    `;
-
-    // 2. Add your Email Logic here if needed
+    await sql`UPDATE loan_applications SET status = ${status} WHERE id = ${loanId}`;
     if (email && status === 'approved') {
-       // Example: await resend.emails.send({...})
        console.log(`Sending approval email to ${email}`);
     }
-
     revalidatePath('/dashboard/loans');
     revalidatePath('/dashboard/guarantors');
-    
     return { success: true, message: `Loan ${status} successfully.` };
   } catch (error: any) {
-    console.error('Update Loan Error:', error);
     return { success: false, message: 'Failed to update loan status.' };
   }
 }
 
 export async function getTodaysLoans() {
   try {
-    const data = await sql`
-      SELECT * FROM loan_applications 
-      WHERE request_date = CURRENT_DATE
-      ORDER BY request_date DESC
-    `;
+    const data = await sql`SELECT * FROM loan_applications WHERE request_date = CURRENT_DATE ORDER BY request_date DESC`;
     return data.rows;
-  } catch (error) {
-    console.error('Failed to fetch today\'s loans:', error);
-    return [];
-  }
+  } catch (error) { return []; }
 }
 
 export async function fetchGuarantors(query: string = '') {
@@ -309,13 +311,11 @@ export async function fetchGuarantors(query: string = '') {
       FROM loan_applications
       WHERE (guarantor_name ILIKE ${'%' + query + '%'} OR first_name ILIKE ${'%' + query + '%'}) 
       AND guarantor_name IS NOT NULL
-      AND status = 'pending'  -- <--- ADD THIS LINE
+      AND status = 'pending'
       ORDER BY request_date DESC
     `;
     return data.rows;
-  } catch (error) { 
-    return []; 
-  }
+  } catch (error) { return []; }
 }
 
 export async function fetchInvestments() {
