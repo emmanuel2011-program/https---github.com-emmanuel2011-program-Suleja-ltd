@@ -244,10 +244,11 @@ export async function createLoan(prevState: any, formData: FormData) {
 
     try {
       await resend.emails.send({
-        from: 'Support <onboarding@resend.dev>',
-        to: [email],
-        subject: 'Loan Application Received',
-        html: `<p>Hi ${firstName}, your loan application for ₦${loanAmount.toLocaleString()} has been received.</p>`
+        from: 'SHHMCSOC <noreply@shhmcsoc.me>',
+      to: [email],
+      subject: 'Application Received - SHHMCSOC',
+      html: `<strong>Hi ${firstName},</strong><p>We have received your loan request for ₦${loanAmount.toLocaleString()}.</p>`
+
       });
     } catch (e) { console.error("Email failed:", e); }
 
