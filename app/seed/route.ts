@@ -78,7 +78,7 @@ async function seedMemberships() {
 }
 
 /**
- * Seed Investments (Matches current InvestmentForm needs)
+ * Seed Investments
  */
 async function seedInvestments() {
   await sql`
@@ -91,6 +91,7 @@ async function seedInvestments() {
       duration VARCHAR(50) NOT NULL,
       bank_name VARCHAR(255) NOT NULL,
       account_number VARCHAR(20) NOT NULL,
+      account_name VARCHAR(255),
       account_class VARCHAR(50) NOT NULL,
       receipt_url TEXT,
       status VARCHAR(20) DEFAULT 'pending',
@@ -139,13 +140,13 @@ async function seedLoanApplications() {
     try {
       await sql`
         INSERT INTO loan_applications (
-          member_id, title, surname, first_name, email, mobile_phone,
+          id, member_id, title, surname, first_name, email, mobile_phone,
           date_of_birth, gender, loan_amount, request_date, duration, 
           interest, bank_name, account_number, account_name, account_type, status,
           repayment_date, purpose_of_loan
         )
         VALUES (
-          ${loan.memberId}, ${loan.title}, ${loan.surname}, ${loan.firstName}, 
+          ${loan.id}, ${loan.memberId}, ${loan.title}, ${loan.surname}, ${loan.firstName}, 
           ${loan.email}, ${loan.mobilePhone}, ${loan.dateOfBirth}, ${loan.gender}, 
           ${loan.loanAmount}, ${loan.requestDate}, ${loan.duration}, 
           ${loan.interest}, ${loan.bankName}, ${loan.accountNumber}, 
@@ -161,6 +162,49 @@ async function seedLoanApplications() {
 }
 
 /**
+ * NEW: Seed Loan Guarantors
+ */
+async function seedLoanGuarantors() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS loan_guarantors (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      loan_application_id UUID NOT NULL REFERENCES loan_applications(id) ON DELETE CASCADE,
+      full_name VARCHAR(255) NOT NULL,
+      phone_number VARCHAR(50),
+      residential_address TEXT,
+      occupation VARCHAR(100),
+      position_grade VARCHAR(100),
+      salary VARCHAR(100),
+      office_address TEXT,
+      relationship VARCHAR(100),
+      years_known INT,
+      passport_url TEXT,
+      id_card_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
+  // Optional: Add a sample guarantor for your seed data if desired
+  // This logic assumes you have at least one loan in your loanApplications array
+  if (loanApplications.length > 0) {
+    const firstLoan = loanApplications[0] as any;
+    try {
+      await sql`
+        INSERT INTO loan_guarantors (
+          loan_application_id, full_name, phone_number, relationship, years_known
+        )
+        VALUES (
+          ${firstLoan.id}, 'Sample Guarantor Name', '08000000000', 'Colleague', 5
+        )
+        ON CONFLICT (id) DO NOTHING;
+      `;
+    } catch (err) {
+      console.error("Guarantor seed failed:", err);
+    }
+  }
+}
+
+/**
  * Main Execution
  */
 export async function GET() {
@@ -168,6 +212,7 @@ export async function GET() {
     await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
 
     // Drop tables in REVERSE order of dependency
+    await sql`DROP TABLE IF EXISTS loan_guarantors CASCADE`;
     await sql`DROP TABLE IF EXISTS investments CASCADE`;
     await sql`DROP TABLE IF EXISTS loan_applications CASCADE`;
     await sql`DROP TABLE IF EXISTS memberships CASCADE`;
@@ -178,9 +223,10 @@ export async function GET() {
     await seedMemberships();
     await seedInvestments();
     await seedLoanApplications();
+    await seedLoanGuarantors(); // Must be seeded after loan_applications
 
     return Response.json({ 
-        message: 'Database reset successfully. Schema updated with receipt_url and member_email.' 
+        message: 'Database reset successfully. Schema updated with Guarantors and Account fields.' 
     });
   } catch (error: any) {
     console.error("Seeding failed:", error);

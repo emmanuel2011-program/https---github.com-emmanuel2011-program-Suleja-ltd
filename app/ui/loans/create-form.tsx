@@ -73,7 +73,7 @@ type FormState = {
   loanAmount: string;
   requestedDate: string;
   duration: string;
-  interest: string; // Will store "13" or "15"
+  interest: string; 
   bankName: string;
   accountNumber: string;
   accountName: string;
@@ -108,7 +108,7 @@ const initialFormState: FormState = {
   loanAmount: '',
   requestedDate: '',
   duration: '1 Month',
-  interest: '15', // DEFAULT TO 15
+  interest: '15',
   bankName: '',
   accountNumber: '',
   accountName: '',
@@ -180,12 +180,35 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
 
     try {
       const formData = new FormData();
-      Object.entries(form).forEach(([key, value]) => {
-        if (value !== null && !(value instanceof File)) {
-          formData.append(key, value.toString());
-        }
-      });
 
+      // Append core fields
+      formData.append('firstName', form.firstName);
+      formData.append('surname', form.surname);
+      formData.append('email', form.email);
+      formData.append('mobilePhone', form.mobilePhone);
+      formData.append('dateOfBirth', form.dateOfBirth); // CRITICAL: Fixes null DB error
+      formData.append('loanAmount', form.loanAmount);
+      formData.append('requestedDate', form.requestedDate);
+      formData.append('purposeOfLoan', form.purposeOfLoan);
+      formData.append('residentialAddress', form.residentialAddress);
+      formData.append('gender', form.gender);
+      formData.append('occupation', form.occupation);
+      formData.append('tin', form.tin);
+      formData.append('bankName', form.bankName);
+      formData.append('accountNumber', form.accountNumber);
+      formData.append('accountName', form.accountName);
+      formData.append('accountType', form.accountType);
+      formData.append('interest', form.interest);
+      formData.append('duration', form.duration);
+
+      // Spouse / Next of Kin
+      formData.append('spouseName', form.spouseName);
+      formData.append('spouseMobilePhone', form.spouseMobilePhone);
+      formData.append('spouseDOB', form.spouseDOB);
+      formData.append('spouseGender', form.spouseGender);
+      formData.append('spouseResidentialAddress', form.spouseResidentialAddress);
+
+      // Interest and Repayment Logic
       const [year, month, day] = form.requestedDate.split('-').map(Number);
       const baseDate = new Date(year, month - 1, day);
       baseDate.setMonth(baseDate.getMonth() + 1);
@@ -193,16 +216,13 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       const y = baseDate.getFullYear();
       const m = String(baseDate.getMonth() + 1).padStart(2, '0');
       const d = String(baseDate.getDate()).padStart(2, '0');
-      const finalRepaymentDate = `${y}-${m}-${d}`;
-
-      formData.append('repaymentDate', finalRepaymentDate);
+      formData.append('repaymentDate', `${y}-${m}-${d}`);
       
-      // --- DYNAMIC INTEREST CALCULATION ---
       const principal = Number(form.loanAmount);
       const selectedRate = Number(form.interest) / 100;
-      const calculatedInterestAmount = principal * selectedRate;
-      formData.append('calculatedInterest', calculatedInterestAmount.toString());
+      formData.append('calculatedInterest', (principal * selectedRate).toString());
 
+      // Files
       if (form.passportFile) {
         const compressed = await compressImage(form.passportFile);
         formData.append('passportFile', compressed, 'passport.jpg');
@@ -213,6 +233,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       }
 
       const response = await createLoan(null, formData); 
+      
       if (response?.success) {
         setSubmitted(true);
       } else {
@@ -220,7 +241,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       }
     } catch (err) {
       console.error("Submission Error:", err);
-      alert("An error occurred. Please check your connection and try again.");
+      alert("An error occurred. Please check your connection.");
     } finally {
       setIsLoading(false);
     }
@@ -304,7 +325,6 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
                 <div className="w-full rounded-md border bg-gray-100 p-2 text-sm font-bold text-gray-600">1 Month</div>
                </div>
                
-               {/* --- DYNAMIC INTEREST DROPDOWN --- */}
                <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Interest Rate *</label>
                 <select 
@@ -407,15 +427,12 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Applicant:</span> <span>{form.firstName} {form.surname}</span></div>
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Amount:</span> <span className="font-bold text-green-700">₦{Number(form.loanAmount).toLocaleString()}</span></div>
               <div className="flex justify-between border-b pb-1"><span className="text-gray-500">Duration:</span> <span>1 Month</span></div>
-              
-              {/* --- DYNAMIC TOTAL CALCULATION --- */}
               <div className="flex justify-between border-b pb-1">
                 <span className="text-gray-500">Estimated Total Due ({form.interest}%):</span> 
                 <span className="font-bold text-red-600">
                   ₦{(Number(form.loanAmount) * (1 + Number(form.interest)/100)).toLocaleString()}
                 </span>
               </div>
-              
               <div className="flex justify-between"><span className="text-gray-500">Documents:</span> <span className="text-green-600 font-medium">Ready for Upload</span></div>
             </div>
           </div>

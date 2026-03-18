@@ -6,11 +6,16 @@ import {
   PhotoIcon, 
   PencilIcon, 
   CheckCircleIcon, 
-  ChevronDownIcon 
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
 import { createInvestment } from '@/app/lib/actions'; 
 import { toast } from 'sonner';
+
+// 1. Define the response type clearly
+interface ActionResponse {
+  success: boolean;
+  message?: string;
+}
 
 export default function InvestmentForm() {
   const [amount, setAmount] = useState<string>('');
@@ -19,7 +24,6 @@ export default function InvestmentForm() {
   const [isPending, setIsPending] = useState(false);
   const [fileName, setFileName] = useState<string>('');
 
-  // Updated effect to calculate interest based on duration (Amount * 7% * Months)
   useEffect(() => {
     const val = parseFloat(amount);
     const months = parseInt(duration) || 1;
@@ -32,27 +36,35 @@ export default function InvestmentForm() {
     }
   };
 
-  async function onSubmit(formData: FormData) {
+  async function handleAction(formData: FormData) {
     setIsPending(true);
     const toastId = toast.loading('Recording investment...');
     
-    const result = await createInvestment(formData);
-    setIsPending(false);
+    try {
+      // 2. Explicitly cast the action result
+      const result = await createInvestment(formData) as ActionResponse;
+      
+      setIsPending(false);
 
-    if (result.success) {
-      toast.success(result.message, { id: toastId });
-      setAmount(''); 
-      setFileName('');
-      (document.getElementById('invest-form') as HTMLFormElement).reset();
-    } else {
-      toast.error(result.message, { id: toastId });
+      if (result.success) {
+        toast.success(result.message || 'Investment submitted!', { id: toastId });
+        setAmount(''); 
+        setFileName('');
+        const form = document.getElementById('invest-form') as HTMLFormElement;
+        form?.reset();
+      } else {
+        toast.error(result.message || 'An error occurred', { id: toastId });
+      }
+    } catch (error) {
+      setIsPending(false);
+      toast.error('System error occurred', { id: toastId });
     }
   }
 
   return (
     <form 
       id="invest-form"
-      action={onSubmit} 
+      action={handleAction} 
       className="max-w-2xl mx-auto bg-white p-6 rounded-xl border border-blue-100 shadow-sm space-y-6"
     >
       <h2 className="text-xl font-black text-blue-900 flex items-center gap-2 uppercase tracking-tight">
@@ -60,13 +72,11 @@ export default function InvestmentForm() {
       </h2>
 
       <div className="space-y-5">
-        {/* Member Email */}
         <div>
           <label className="text-[10px] font-black uppercase text-gray-500 ml-1">Member Email *</label>
           <input name="email" type="email" required className="w-full border-gray-200 rounded-md p-2.5 mt-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50" placeholder="member@example.com" />
         </div>
 
-        {/* Amount & ROI Display */}
         <div className="bg-blue-600 p-5 rounded-xl flex justify-between items-center shadow-inner">
           <div className="w-1/2">
             <label className="text-[10px] font-black text-blue-100 uppercase tracking-widest">Amount to Invest (₦)</label>
@@ -86,7 +96,6 @@ export default function InvestmentForm() {
           </div>
         </div>
 
-        {/* Duration & Account Class */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[10px] font-black uppercase text-gray-500 ml-1">Investment Duration *</label>
@@ -115,7 +124,6 @@ export default function InvestmentForm() {
           </div>
         </div>
 
-        {/* Bank Details */}
         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-4">
             <div>
               <label className="text-[10px] font-black uppercase text-gray-500 ml-1">Account Name (Payout Name) *</label>
@@ -133,7 +141,6 @@ export default function InvestmentForm() {
             </div>
         </div>
 
-        {/* Proof of Payment */}
         <div className={`border-2 border-dashed p-6 rounded-xl transition-all ${fileName ? 'border-green-400 bg-green-50' : 'border-blue-200 bg-gray-50 hover:bg-blue-50/50'}`}>
           <label className="block text-center cursor-pointer">
             {fileName ? (
@@ -158,27 +165,26 @@ export default function InvestmentForm() {
           </label>
         </div>
 
-        {/* Terms & Signature */}
         <div className="p-4 bg-gray-900 rounded-xl space-y-4">
-           <label className="flex gap-3 cursor-pointer items-start">
-             <input type="checkbox" name="contractNotice" required className="mt-1 h-4 w-4 rounded border-none text-blue-500 focus:ring-offset-gray-900" />
-             <span className="text-[11px] text-gray-300 leading-tight">
-               I agree to provide <strong>one month's notice</strong> before withdrawing my total funds and verify all bank details are correct.
-             </span>
-           </label>
+            <label className="flex gap-3 cursor-pointer items-start">
+              <input type="checkbox" name="contractNotice" required className="mt-1 h-4 w-4 rounded border-none text-blue-500 focus:ring-offset-gray-900" />
+              <span className="text-[11px] text-gray-300 leading-tight">
+                I agree to provide <strong>one month's notice</strong> before withdrawing my total funds and verify all bank details are correct.
+              </span>
+            </label>
 
-           <div className="pt-3 border-t border-gray-700">
-              <label className="text-[10px] font-black uppercase text-blue-400 flex items-center gap-1">
-                <PencilIcon className="h-3 w-3" /> Digital Signature *
-              </label>
-              <input 
-                name="signatureName" 
-                type="text" 
-                required 
-                placeholder="Type your full legal name" 
-                className="w-full mt-1 bg-gray-800 border-none rounded p-2.5 text-sm italic font-bold text-white shadow-inner outline-none focus:ring-2 focus:ring-blue-500"
-              />
-           </div>
+            <div className="pt-3 border-t border-gray-700">
+               <label className="text-[10px] font-black uppercase text-blue-400 flex items-center gap-1">
+                 <PencilIcon className="h-3 w-3" /> Digital Signature *
+               </label>
+               <input 
+                 name="signatureName" 
+                 type="text" 
+                 required 
+                 placeholder="Type your full legal name" 
+                 className="w-full mt-1 bg-gray-800 border-none rounded p-2.5 text-sm italic font-bold text-white shadow-inner outline-none focus:ring-2 focus:ring-blue-500"
+               />
+            </div>
         </div>
 
         <Button 
