@@ -165,6 +165,18 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       if (!form.passportFile) return "Please upload a Passport Photograph.";
       if (!form.idCardFile) return "Please upload a valid ID Card.";
     }
+    // --- UPDATED: COMPULSORY SPOUSE INFO ---
+    if (step === 5) {
+        if (!form.spouseTitle) return "Spouse title is required.";
+        if (!form.spouseName.trim()) return "Spouse full name is required.";
+        if (!form.spouseDOB) return "Spouse Date of Birth is required.";
+        if (!form.spouseGender) return "Spouse gender is required.";
+        if (!isValidPhone(form.spouseMobilePhone)) return "Spouse mobile phone must be exactly 11 digits.";
+        if (!form.spouseNationality.trim()) return "Spouse nationality is required.";
+        if (!form.spouseStateOfOrigin.trim()) return "Spouse state of origin is required.";
+        if (!form.spouseLGA.trim()) return "Spouse LGA is required.";
+        if (!form.spouseResidentialAddress.trim()) return "Spouse residential address is required.";
+    }
     return null;
   }
 
@@ -186,7 +198,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       formData.append('surname', form.surname);
       formData.append('email', form.email);
       formData.append('mobilePhone', form.mobilePhone);
-      formData.append('dateOfBirth', form.dateOfBirth); // CRITICAL: Fixes null DB error
+      formData.append('dateOfBirth', form.dateOfBirth); 
       formData.append('loanAmount', form.loanAmount);
       formData.append('requestedDate', form.requestedDate);
       formData.append('purposeOfLoan', form.purposeOfLoan);
@@ -207,6 +219,10 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       formData.append('spouseDOB', form.spouseDOB);
       formData.append('spouseGender', form.spouseGender);
       formData.append('spouseResidentialAddress', form.spouseResidentialAddress);
+      formData.append('spouseTitle', form.spouseTitle);
+      formData.append('spouseNationality', form.spouseNationality);
+      formData.append('spouseState', form.spouseStateOfOrigin);
+      formData.append('spouseLGA', form.spouseLGA);
 
       // Interest and Repayment Logic
       const [year, month, day] = form.requestedDate.split('-').map(Number);
@@ -297,7 +313,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               </div>
 
               <div className="mt-4 pt-4 border-t border-green-200">
-                 <label className="flex items-center gap-3 cursor-pointer group">
+                  <label className="flex items-center gap-3 cursor-pointer group">
                     <input 
                       type="checkbox" 
                       checked={form.hasSentEmailDocs}
@@ -307,7 +323,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
                     <span className="text-xs font-bold text-green-800 group-hover:text-green-600 transition-colors">
                       I have sent my BOQ/Contract documents to the email above.
                     </span>
-                 </label>
+                  </label>
               </div>
             </div>
 
@@ -390,31 +406,31 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
         return (
           <div className="space-y-4 animate-in fade-in duration-300">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-              <HeartIcon className="h-5 w-5 text-green-600" /> Next of Kin / Spouse Information
+              <HeartIcon className="h-5 w-5 text-green-600" /> Next of Kin / Spouse Information (Required)
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select value={form.spouseTitle} onChange={e => update('spouseTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500">
-                <option value="">Select Title</option>
+              <select value={form.spouseTitle} onChange={e => update('spouseTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500" required>
+                <option value="">Select Title *</option>
                 <option value="Mr">Mr</option>
                 <option value="Mrs">Mrs</option>
                 <option value="Miss">Miss</option>
               </select>
-              <input type="text" placeholder="Spouse Full Name" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+              <input type="text" placeholder="Spouse Full Name *" value={form.spouseName} onChange={e => update('spouseName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Spouse Date of Birth</label>
-                <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+                <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Spouse Date of Birth *</label>
+                <input type="date" value={form.spouseDOB} onChange={e => update('spouseDOB', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               </div>
-              <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500">
-                <option value="">Spouse Gender</option>
+              <select value={form.spouseGender} onChange={e => update('spouseGender', e.target.value)} className="rounded-md border p-2 text-sm bg-white outline-none focus:ring-1 focus:ring-green-500" required>
+                <option value="">Spouse Gender *</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-              <input type="tel" placeholder="Spouse Phone" value={form.spouseMobilePhone} onChange={e => update('spouseMobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
-              <input type="text" placeholder="Spouse Nationality" value={form.spouseNationality} onChange={e => update('spouseNationality', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
-              <input type="text" placeholder="State of Origin" value={form.spouseStateOfOrigin} onChange={e => update('spouseStateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
-              <input type="text" placeholder="LGA" value={form.spouseLGA} onChange={e => update('spouseLGA', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+              <input type="tel" placeholder="Spouse Phone (11 digits) *" value={form.spouseMobilePhone} onChange={e => update('spouseMobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              <input type="text" placeholder="Spouse Nationality *" value={form.spouseNationality} onChange={e => update('spouseNationality', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              <input type="text" placeholder="State of Origin *" value={form.spouseStateOfOrigin} onChange={e => update('spouseStateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              <input type="text" placeholder="LGA *" value={form.spouseLGA} onChange={e => update('spouseLGA', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               <div className="md:col-span-2">
-                <textarea placeholder="Spouse Residential Address" value={form.spouseResidentialAddress} onChange={e => update('spouseResidentialAddress', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+                <textarea placeholder="Spouse Residential Address *" value={form.spouseResidentialAddress} onChange={e => update('spouseResidentialAddress', e.target.value)} rows={2} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               </div>
             </div>
           </div>
