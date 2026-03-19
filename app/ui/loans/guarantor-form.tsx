@@ -13,7 +13,7 @@ import {
   UserGroupIcon,
   CalendarIcon,
   ArrowPathIcon,
-  EnvelopeIcon // Added for the Email field
+  EnvelopeIcon 
 } from '@heroicons/react/24/outline';
 
 export default function GuarantorForm() {
@@ -26,29 +26,39 @@ export default function GuarantorForm() {
     idCard: null as File | null
   });
 
-  async function clientAction(formData: FormData) {
+  // --- FIXED HANDLER ---
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); // Prevents the browser from reloading/freezing
+    
     setLoading(true);
     setError('');
 
-    // Validation Check before sending to server
+    // 1. Validation Check
     if (!files.passport || !files.idCard) {
       setError("Please upload both the Passport Photo and ID Card.");
       setLoading(false);
       return;
     }
 
-    if (files.passport) formData.append('guarantorPassportFile', files.passport);
-    if (files.idCard) formData.append('guarantorIdFile', files.idCard);
+    // 2. Prepare FormData
+    const formData = new FormData(e.currentTarget);
+    formData.append('guarantorPassportFile', files.passport);
+    formData.append('guarantorIdFile', files.idCard);
 
     try {
+      // Small delay to ensure the UI paints the "Uploading" state
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const result = await createLoan(null, formData);
+      
       if (result.success) {
         setSuccess(true);
       } else {
-        setError(result.message);
+        setError(result.message || "Submission failed on the server.");
       }
     } catch (err) {
-      setError("A system error occurred. Please try again.");
+      console.error(err);
+      setError("A system error occurred. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -70,7 +80,8 @@ export default function GuarantorForm() {
   }
 
   return (
-    <form action={clientAction} className="space-y-6">
+    /* Changed action={clientAction} to onSubmit={handleSubmit} */
+    <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded animate-bounce">
           <p className="text-red-700 text-xs font-bold">{error}</p>
@@ -122,13 +133,12 @@ export default function GuarantorForm() {
           <input name="guarantorName" type="text" placeholder="Guarantor Full Name *" className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" required />
         </div>
 
-        {/* --- GUARANTOR EMAIL FIELD (NEW) --- */}
         <div className="relative">
           <EnvelopeIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <input 
             name="guarantorEmail" 
             type="email" 
-            placeholder="Guarantor Email Address (for acknowledgment) *" 
+            placeholder="Guarantor Email Address *" 
             className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" 
             required 
           />
@@ -152,7 +162,6 @@ export default function GuarantorForm() {
           <textarea name="residentialAddress" placeholder="Guarantor Residential Address *" rows={2} className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" required />
         </div>
 
-        {/* --- UPLOADS WITH VISUAL PREVIEW STATE --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           <div className={`p-3 border-2 border-dashed rounded-lg transition-all ${files.passport ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-100' : 'bg-gray-50 border-gray-200'}`}>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -206,6 +215,7 @@ export default function GuarantorForm() {
   );
 }
 
+// Icon Helper
 function ShieldCheckIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
