@@ -14,52 +14,42 @@ export const LoanStatusEmail = ({
   firstName,
   status,
   amount,
+  interestAmount, // Added to match actions.ts
+  totalRepayment, // Added to match actions.ts
   repaymentDate,
 }: {
   firstName: string;
-  status: string; // Changed to general string for safety
-  amount?: string | number;
-  repaymentDate?: any; // Changed to any to handle Date objects or Strings
+  status: string;
+  amount: number | string;
+  interestAmount: number | string; // Prop defined here
+  totalRepayment: number | string; // Prop defined here
+  repaymentDate?: any;
 }) => {
-  let formattedDueDate = 'Not Set';
   let formattedReminderDate = 'Not Set';
-  let interestAmount = 0;
-  let totalRepayment = 0;
 
   // Normalize status for comparison
-  const isApproved = status?.toLowerCase() === 'approved';
-
-  if (isApproved && amount) {
-    interestAmount = Number(amount) * 0.15;
-    totalRepayment = Number(amount) + interestAmount;
-  }
+  const isApproved = status?.toLowerCase() === 'approved' || status?.toLowerCase() === 'active';
 
   if (isApproved && repaymentDate) {
     try {
       let actualDueDate: Date;
 
       if (typeof repaymentDate === 'string') {
-        // Handle ISO string from database
-        const datePart = repaymentDate.split('T')[0];
-        const [year, month, day] = datePart.split('-').map(Number);
-        actualDueDate = new Date(year, month - 1, day);
+        // If it's a "Day Month Year" string from server, or ISO string
+        actualDueDate = new Date(repaymentDate);
       } else {
-        // Handle if it's already a Date object
         actualDueDate = new Date(repaymentDate);
       }
 
-      // Calculate Reminder Date (D - 1)
+      // Calculate Reminder Date (1 day before)
       const reminderDate = new Date(actualDueDate);
       reminderDate.setDate(actualDueDate.getDate() - 1);
 
-      // Formatting
       const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
-      formattedDueDate = actualDueDate.toLocaleDateString('en-NG', options);
       formattedReminderDate = reminderDate.toLocaleDateString('en-NG', options);
       
     } catch (e) {
       console.error("Date calculation error", e);
-      formattedDueDate = "Invalid Date";
       formattedReminderDate = "Invalid Date";
     }
   }
@@ -79,21 +69,26 @@ export const LoanStatusEmail = ({
               <Text style={{ fontWeight: 'bold', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>OFFICIAL STATEMENT</Text>
               
               <Text>Principal Amount: <strong>₦{Number(amount).toLocaleString('en-NG')}</strong></Text>
-              <Text>Interest Rate: <strong>15%</strong></Text>
-              <Text>Interest Amount: <strong>₦{interestAmount.toLocaleString('en-NG')}</strong></Text>
+              <Text>Interest Amount: <strong>₦{Number(interestAmount).toLocaleString('en-NG')}</strong></Text>
               
               <Hr style={{ borderColor: '#ddd' }} />
               
               <Text style={{ fontSize: '18px', color: '#1a365d' }}>
-                Total Repayment: <strong>₦{totalRepayment.toLocaleString('en-NG')}</strong>
+                Total Repayment: <strong>₦{Number(totalRepayment).toLocaleString('en-NG')}</strong>
               </Text>
 
               <Hr style={{ borderColor: '#ddd' }} />
+
+              <Text>Due Date: <strong>{repaymentDate}</strong></Text>
 
               <Text style={{ color: '#dc2626', fontWeight: 'bold' }}>
                 Repayment Reminder Date: {formattedReminderDate}
               </Text>
             </Section>
+          )}
+
+          {!isApproved && status.toLowerCase() === 'rejected' && (
+            <Text>We regret to inform you that your loan application was not successful at this time.</Text>
           )}
 
           {isApproved && (

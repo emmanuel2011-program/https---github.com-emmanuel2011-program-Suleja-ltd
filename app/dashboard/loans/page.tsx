@@ -30,8 +30,12 @@ export default function AdminLoansPage() {
     loadLoans();
   }, []);
 
+  /**
+   * Updated to only pass 2 arguments to match the action definition
+   */
   const handleStatusUpdate = async (loan: any, status: 'approved' | 'rejected') => {
-    const promise = updateLoanStatus(loan.id, status, loan.email, loan.first_name);
+    // FIX: Only passing loan.id and status to resolve the build error
+    const promise = updateLoanStatus(loan.id, status);
 
     toast.promise(promise, {
       loading: `Processing ${status}...`,
@@ -87,7 +91,7 @@ export default function AdminLoansPage() {
                 </div>
               </div>
 
-              {/* 2. Document & Verification (Yahoo Envelope Fix) */}
+              {/* 2. Document & Verification */}
               <div className="flex items-center justify-around md:justify-center gap-4 md:gap-8 border-t border-b md:border-t-0 md:border-b-0 md:border-l md:border-r py-4 md:py-0 md:px-8">
                 <a 
                   href={`https://mail.yahoo.com/d/search/keyword=${encodeURIComponent(loan.email)}`} 
