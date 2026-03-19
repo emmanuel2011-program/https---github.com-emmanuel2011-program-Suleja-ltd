@@ -12,7 +12,8 @@ import {
   IdentificationIcon,
   UserGroupIcon,
   CalendarIcon,
-  ArrowPathIcon // Added for loading spinner
+  ArrowPathIcon,
+  EnvelopeIcon // Added for the Email field
 } from '@heroicons/react/24/outline';
 
 export default function GuarantorForm() {
@@ -121,6 +122,18 @@ export default function GuarantorForm() {
           <input name="guarantorName" type="text" placeholder="Guarantor Full Name *" className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" required />
         </div>
 
+        {/* --- GUARANTOR EMAIL FIELD (NEW) --- */}
+        <div className="relative">
+          <EnvelopeIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <input 
+            name="guarantorEmail" 
+            type="email" 
+            placeholder="Guarantor Email Address (for acknowledgment) *" 
+            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" 
+            required 
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
             <PhoneIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -193,7 +206,6 @@ export default function GuarantorForm() {
   );
 }
 
-// Keeping your Icon helper function
 function ShieldCheckIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>

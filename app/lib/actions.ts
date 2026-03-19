@@ -13,6 +13,7 @@ import { render } from '@react-email/render';
 import { WelcomeMembershipEmail } from '@/app/ui/emails/welcome-membership';
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation'; 
 import { LoanStatusEmail } from '@/app/ui/emails/loan-status';
+import { GuarantorConfirmationEmail } from '@/app/ui/emails/guarantor-confirmation';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -131,7 +132,6 @@ export async function createMembership(formData: FormData) {
       RETURNING id
     `;
 
-    // SEND WELCOME EMAIL
     try {
       const emailHtml = await render(
         React.createElement(WelcomeMembershipEmail, { firstName, surname })
@@ -144,35 +144,6 @@ export async function createMembership(formData: FormData) {
       });
     } catch (e) { console.error("Welcome email failed:", e); }
 
-    const memberId = membershipResult.rows[0].id;
-    const amountStr = formData.get('amountToInvest');
-
-    if (amountStr && parseFloat(amountStr.toString()) > 0) {
-      const amount = parseFloat(amountStr.toString());
-      const duration = (formData.get('duration') as string) || '1 Month (Renewable)';
-      const months = getMonthsFromDuration(duration);
-      const totalInterest = amount * 0.07 * months;
-      const receiptUrl = await uploadFile(formData.get('paymentReceipt') as File, 'receipts');
-
-      await sql`
-        INSERT INTO investments (
-          member_id, member_email, amount, monthly_interest, 
-          bank_name, account_number, account_name, receipt_url, status,
-          contract_accepted, duration, account_class
-        )
-        VALUES (
-          ${memberId}, ${email}, ${amount}, ${totalInterest}, 
-          ${formData.get('bankName') as string}, 
-          ${formData.get('accountNumber') as string},
-          ${formData.get('accountName') as string},
-          ${receiptUrl}, 'pending',
-          ${formData.get('contractNotice') === 'on'},
-          ${duration}, 
-          ${formData.get('accountClass') as string || 'Investment'}
-        )
-      `;
-    }
-
     revalidatePath('/dashboard/memberships');
     return { success: true };
   } catch (error: any) {
@@ -181,7 +152,7 @@ export async function createMembership(formData: FormData) {
 }
 
 /**
- * ACTION: Create Loan Application
+ * ACTION: Create Loan Application (Smart Update/Insert)
  */
 export async function createLoan(prevState: any, formData: FormData) {
   try {
@@ -190,98 +161,117 @@ export async function createLoan(prevState: any, formData: FormData) {
     const firstName = formData.get('firstName') as string;
     const loanAmount = parseFloat(formData.get('loanAmount') as string) || 0;
     const duration = (formData.get('duration') as string) || '1 Month';
+    const guarantorEmail = formData.get('guarantorEmail') as string;
+    const guarantorName = formData.get('guarantorName') as string;
 
-    const defaultDate = new Date();
-    defaultDate.setDate(defaultDate.getDate() + 30);
-    const repaymentDate = formData.get('repaymentDate') as string || defaultDate.toISOString().split('T')[0];
-
+    // File Uploads
     const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
     const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
     const gPassportUrl = await uploadFile(formData.get('guarantorPassportFile') as File, 'guarantor_passports');
     const gIdUrl = await uploadFile(formData.get('guarantorIdFile') as File, 'guarantor_ids');
 
-    const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
-    let memberId = existingMember.rows[0]?.id;
-    
-    if (!memberId) {
-      const newMember = await sql`
-        INSERT INTO memberships (surname, first_name, email, mobile_phone, residential_address, date_of_birth, gender, nationality)
-        VALUES (
-          ${surname}, ${firstName}, ${email}, 
-          ${formData.get('mobilePhone') as string}, 
-          ${formData.get('residentialAddress') as string}, 
-          ${formData.get('dateOfBirth') as string}, 
-          ${formData.get('gender') as string}, 
-          ${formData.get('nationality') as string}
-        )
-        RETURNING id
+    // Check if loan application exists
+    const existingLoan = await sql`SELECT id FROM loan_applications WHERE email = ${email} LIMIT 1`;
+
+    if (existingLoan.rows.length > 0) {
+      // --- UPDATE EXISTING APPLICATION (Guarantor Phase) ---
+      const loanId = existingLoan.rows[0].id;
+      await sql`
+        UPDATE loan_applications 
+        SET 
+          guarantor_name = ${guarantorName},
+          guarantor_phone = ${formData.get('guarantorPhone') as string},
+          guarantor_relationship = ${formData.get('guarantorRelationship') as string},
+          guarantor_workplace = ${formData.get('guarantorWorkplace') as string},
+          guarantor_passport_url = COALESCE(${gPassportUrl}, guarantor_passport_url),
+          guarantor_id_url = COALESCE(${gIdUrl}, guarantor_id_url),
+          residential_address = ${formData.get('residentialAddress') as string}
+        WHERE id = ${loanId}
       `;
-      memberId = newMember.rows[0].id;
+    } else {
+      // --- CREATE NEW APPLICATION (Applicant Phase) ---
+      const defaultDate = new Date();
+      defaultDate.setDate(defaultDate.getDate() + 30);
+      const repaymentDate = formData.get('repaymentDate') as string || defaultDate.toISOString().split('T')[0];
+
+      // Check member status
+      const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
+      let memberId = existingMember.rows[0]?.id;
+      
+      if (!memberId) {
+        const newMember = await sql`
+          INSERT INTO memberships (surname, first_name, email, mobile_phone, residential_address, date_of_birth, gender, nationality)
+          VALUES (${surname}, ${firstName}, ${email}, ${formData.get('mobilePhone') as string}, ${formData.get('residentialAddress') as string}, ${formData.get('dateOfBirth') as string}, ${formData.get('gender') as string}, ${formData.get('nationality') as string})
+          RETURNING id
+        `;
+        memberId = newMember.rows[0].id;
+      }
+
+      await sql`
+        INSERT INTO loan_applications (
+          member_id, surname, first_name, middle_name, email, mobile_phone, loan_amount, duration, interest, 
+          bank_name, account_number, account_name, account_type, purpose_of_loan, repayment_date,
+          passport_url, id_card_url, status, request_date, residential_address,
+          date_of_birth, gender, nationality,
+          guarantor_name, guarantor_phone, guarantor_relationship, guarantor_workplace,
+          guarantor_passport_url, guarantor_id_url,
+          spouse_title, spouse_name, spouse_phone, spouse_dob, 
+          spouse_gender, spouse_nationality, spouse_state, spouse_lga, spouse_address
+        )
+        VALUES (
+          ${memberId}, ${surname}, ${firstName}, ${formData.get('middleName') as string || null}, ${email}, ${formData.get('mobilePhone') as string},
+          ${loanAmount}, ${duration}, ${formData.get('interest') as string || '15%'}, 
+          ${formData.get('bankName') as string || 'N/A'}, 
+          ${formData.get('accountNumber') as string || '0000000000'}, 
+          ${formData.get('accountName') as string || (firstName + ' ' + surname)}, 
+          ${formData.get('accountType') as string || 'Savings'},
+          ${formData.get('purposeOfLoan') as string || 'General'}, 
+          ${repaymentDate}, 
+          ${passportUrl}, ${idCardUrl}, 'pending', 
+          CURRENT_DATE, 
+          ${formData.get('residentialAddress') as string},
+          ${formData.get('dateOfBirth') as string}, 
+          ${formData.get('gender') as string},
+          ${formData.get('nationality') as string},
+          ${guarantorName || 'N/A'}, ${formData.get('guarantorPhone') as string || 'N/A'}, 
+          ${formData.get('guarantorRelationship') as string || 'N/A'},
+          ${formData.get('guarantorWorkplace') as string || 'N/A'},
+          ${gPassportUrl}, ${gIdUrl},
+          ${formData.get('spouseTitle') as string || null}, ${formData.get('spouseName') as string || null},
+          ${formData.get('spousePhone') as string || null}, ${formData.get('spouseDOB') as string || null},
+          ${formData.get('spouseGender') as string || null}, ${formData.get('spouseNationality') as string || null},
+          ${formData.get('spouseState') as string || null}, ${formData.get('spouseLGA') as string || null},
+          ${formData.get('spouseAddress') as string || null}
+        )
+      `;
+
+      // Email Applicant
+      try {
+        const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName, loanAmount: loanAmount.toLocaleString('en-NG'), duration }));
+        await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
+      } catch (e) { console.error("App email fail:", e); }
     }
 
-    await sql`
-      INSERT INTO loan_applications (
-        member_id, surname, first_name, middle_name, email, mobile_phone, loan_amount, duration, interest, 
-        bank_name, account_number, account_name, account_type, purpose_of_loan, repayment_date,
-        passport_url, id_card_url, status, request_date, residential_address,
-        date_of_birth, gender, nationality,
-        guarantor_name, guarantor_phone, guarantor_relationship, guarantor_workplace,
-        guarantor_passport_url, guarantor_id_url,
-        spouse_title, spouse_name, spouse_phone, spouse_dob, 
-        spouse_gender, spouse_nationality, spouse_state, spouse_lga, spouse_address
-      )
-      VALUES (
-        ${memberId}, ${surname}, ${firstName}, ${formData.get('middleName') as string || null}, ${email}, ${formData.get('mobilePhone') as string},
-        ${loanAmount}, ${duration}, ${formData.get('interest') as string || '15%'}, 
-        ${formData.get('bankName') as string || 'N/A'}, 
-        ${formData.get('accountNumber') as string || '0000000000'}, 
-        ${formData.get('accountName') as string || (firstName + ' ' + surname)}, 
-        ${formData.get('accountType') as string || 'Savings'},
-        ${formData.get('purposeOfLoan') as string || 'General'}, 
-        ${repaymentDate}, 
-        ${passportUrl}, ${idCardUrl}, 'pending', 
-        CURRENT_DATE, 
-        ${formData.get('residentialAddress') as string},
-        ${formData.get('dateOfBirth') as string}, 
-        ${formData.get('gender') as string},
-        ${formData.get('nationality') as string},
-        ${formData.get('guarantorName') as string || 'N/A'}, 
-        ${formData.get('guarantorPhone') as string || 'N/A'}, 
-        ${formData.get('guarantorRelationship') as string || 'N/A'},
-        ${formData.get('guarantorWorkplace') as string || 'N/A'},
-        ${gPassportUrl}, ${gIdUrl},
-        ${formData.get('spouseTitle') as string || null},
-        ${formData.get('spouseName') as string || null},
-        ${formData.get('spousePhone') as string || null},
-        ${formData.get('spouseDOB') as string || null},
-        ${formData.get('spouseGender') as string || null},
-        ${formData.get('spouseNationality') as string || null},
-        ${formData.get('spouseState') as string || null},
-        ${formData.get('spouseLGA') as string || null},
-        ${formData.get('spouseAddress') as string || null}
-      )
-    `;
-
-    // SEND LOAN CONFIRMATION EMAIL
-    try {
-      const emailHtml = await render(
-        React.createElement(LoanConfirmationEmail, {
-          firstName,
-          loanAmount: loanAmount.toLocaleString('en-NG'),
-          duration
-        })
-      );
-      await resend.emails.send({
-        from: 'SHHMCSOC Support <noreply@shhmcsoc.me>',
-        to: [email],
-        subject: 'Application Received - SHHMCSOC',
-        html: emailHtml,
-      });
-    } catch (e) { console.error("Loan confirmation email failed:", e); }
+    // --- SEND GUARANTOR EMAIL (If applicable) ---
+    if (guarantorEmail && guarantorEmail.includes('@')) {
+      try {
+        const guarantorHtml = await render(React.createElement(GuarantorConfirmationEmail, {
+          guarantorName: guarantorName || 'Guarantor',
+          applicantName: `${firstName} ${surname}`,
+          loanAmount: loanAmount,
+        }));
+        await resend.emails.send({
+          from: 'SHHMCSOC Support <noreply@shhmcsoc.me>',
+          to: [guarantorEmail],
+          subject: 'Guarantor Acknowledgment - SHHMCSOC',
+          html: guarantorHtml,
+        });
+      } catch (e) { console.error("Guarantor email fail:", e); }
+    }
 
     revalidatePath('/dashboard/loans');
     revalidatePath('/dashboard/guarantors');
-    return { success: true, message: 'Loan submitted successfully!' };
+    return { success: true, message: 'Loan processed successfully!' };
   } catch (error: any) {
     console.error('Loan error:', error);
     return { success: false, message: `System Error: ${error.message}` };
@@ -289,61 +279,31 @@ export async function createLoan(prevState: any, formData: FormData) {
 }
 
 /**
- * ACTION: Update Loan Status (FETCH DATA BEFORE SENDING EMAIL)
+ * ACTION: Update Loan Status
  */
-export async function updateLoanStatus(
-  loanId: string, 
-  status: 'active' | 'rejected' | 'pending' | 'approved'
-) {
+export async function updateLoanStatus(loanId: string, status: 'active' | 'rejected' | 'pending' | 'approved') {
   try {
-    // 1. Update the status in the database
     await sql`UPDATE loan_applications SET status = ${status} WHERE id = ${loanId}`;
-
-    // 2. Fetch loan details
-    const loanResult = await sql`
-      SELECT first_name, email, loan_amount, repayment_date, interest 
-      FROM loan_applications 
-      WHERE id = ${loanId} 
-      LIMIT 1
-    `;
+    const loanResult = await sql`SELECT first_name, email, loan_amount, repayment_date, interest FROM loan_applications WHERE id = ${loanId} LIMIT 1`;
 
     if (loanResult.rows.length > 0) {
       const loan = loanResult.rows[0] as any;
-      
       const principal = parseFloat(loan.loan_amount || '0');
-      const interestRaw = String(loan.interest || '15%');
-      
-      // Convert "15%" string to 0.15 number
-      const interestRate = parseFloat(interestRaw.replace('%', '')) / 100;
-      
-      // Calculate the dollar/naira amount of interest
+      const interestRate = parseFloat(String(loan.interest || '15%').replace('%', '')) / 100;
       const calculatedInterestAmount = principal * interestRate; 
       const totalRepayment = principal + calculatedInterestAmount;
 
       try {
-        const emailHtml = await render(
-          React.createElement(LoanStatusEmail, {
-            firstName: loan.first_name,
-            status: status,
-            amount: principal,
-            // PASS THE CALCULATED NUMBER HERE
-            interestAmount: calculatedInterestAmount, 
-            totalRepayment: totalRepayment,
-            repaymentDate: loan.repayment_date ? new Date(loan.repayment_date).toLocaleDateString('en-NG', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            }) : 'N/A'
-          })
-        );
-
-        await resend.emails.send({
-          from: 'SHHMCSOC Support <noreply@shhmcsoc.me>',
-          to: [loan.email],
-          subject: `Loan Application ${status.toUpperCase()} - SHHMCSOC`,
-          html: emailHtml,
-        });
-      } catch (e) { console.error("Status email failed:", e); }
+        const emailHtml = await render(React.createElement(LoanStatusEmail, {
+          firstName: loan.first_name,
+          status: status,
+          amount: principal,
+          interestAmount: calculatedInterestAmount, 
+          totalRepayment: totalRepayment,
+          repaymentDate: loan.repayment_date ? new Date(loan.repayment_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'
+        }));
+        await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [loan.email], subject: `Loan Application ${status.toUpperCase()} - SHHMCSOC`, html: emailHtml });
+      } catch (e) { console.error("Status email fail:", e); }
     }
 
     revalidatePath('/dashboard/loans');
@@ -404,6 +364,9 @@ export async function approveInvestment(investmentId: string) {
   return { success: true };
 }
 
+/**
+ * AUTH
+ */
 export async function authenticate(prevState: string | undefined, formData: FormData) {
   try { await signIn('credentials', formData); } 
   catch (error) {
