@@ -97,41 +97,40 @@ export async function createMembership(formData: FormData) {
     const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
     const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
 
-    const membershipResult = await sql`
-      INSERT INTO memberships (
-        title, surname, first_name, middle_name, date_of_birth, 
-        gender, nationality, email, mobile_phone, residential_address, 
-        tin, passport_url, id_card_url,
-        spouse_name, spouse_phone, spouse_dob, spouse_gender,
-        spouse_nationality, spouse_state, spouse_lga, spouse_address, spouse_title
-      )
-      VALUES (
-        ${formData.get('title') as string || 'Mr/Ms'}, 
-        ${surname}, 
-        ${firstName}, 
-        ${formData.get('middleName') as string || null}, 
-        ${formData.get('dateOfBirth') as string}, 
-        ${formData.get('gender') as string || 'Not Specified'},
-        ${formData.get('nationality') as string || 'Nigerian'}, 
-        ${email}, 
-        ${formData.get('mobilePhone') as string}, 
-        ${formData.get('residentialAddress') as string}, 
-        ${formData.get('tin') as string || null},
-        ${passportUrl},
-        ${idCardUrl},
-        ${formData.get('spouseName') as string || null},
-        ${formData.get('spousePhone') as string || null},
-        ${formData.get('spouseDOB') as string || null},
-        ${formData.get('spouseGender') as string || null},
-        ${formData.get('spouseNationality') as string || null},
-        ${formData.get('spouseState') as string || null},
-        ${formData.get('spouseLGA') as string || null},
-        ${formData.get('spouseAddress') as string || null},
-        ${formData.get('spouseTitle') as string || null}
-      )
-      RETURNING id
-    `;
-
+    // Fixed INSERT statement for createMembership
+const membershipResult = await sql`
+  INSERT INTO memberships (
+    title, 
+    surname, 
+    first_name, 
+    middle_name, 
+    date_of_birth, 
+    gender, 
+    nationality, 
+    email, 
+    mobile_phone, 
+    residential_address, 
+    tin, 
+    passport_url, 
+    id_card_url
+  )
+  VALUES (
+    ${formData.get('title') as string || 'Mr/Ms'}, 
+    ${surname}, 
+    ${firstName}, 
+    ${formData.get('middleName') as string || null}, 
+    ${formData.get('dateOfBirth') as string}, 
+    ${formData.get('gender') as string || 'Not Specified'},
+    ${formData.get('nationality') as string || 'Nigerian'}, 
+    ${email}, 
+    ${formData.get('mobilePhone') as string}, 
+    ${formData.get('residentialAddress') as string}, 
+    ${formData.get('tin') as string || null},
+    ${passportUrl},
+    ${idCardUrl}
+  )
+  RETURNING id
+`;
     try {
       const emailHtml = await render(
         React.createElement(WelcomeMembershipEmail, { firstName, surname })
