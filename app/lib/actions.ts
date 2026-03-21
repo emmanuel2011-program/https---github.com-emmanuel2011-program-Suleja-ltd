@@ -93,44 +93,32 @@ export async function createMembership(formData: FormData) {
     const firstName = formData.get('firstName') as string;
     const surname = formData.get('surname') as string;
     const email = formData.get('email') as string;
+    const tin = formData.get('tin') as string || 'N/A';
 
     const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
     const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
 
-    // Fixed INSERT statement for createMembership
-const membershipResult = await sql`
-  INSERT INTO memberships (
-    title, 
-    surname, 
-    first_name, 
-    middle_name, 
-    date_of_birth, 
-    gender, 
-    nationality, 
-    email, 
-    mobile_phone, 
-    residential_address, 
-    tin, 
-    passport_url, 
-    id_card_url
-  )
-  VALUES (
-    ${formData.get('title') as string || 'Mr/Ms'}, 
-    ${surname}, 
-    ${firstName}, 
-    ${formData.get('middleName') as string || null}, 
-    ${formData.get('dateOfBirth') as string}, 
-    ${formData.get('gender') as string || 'Not Specified'},
-    ${formData.get('nationality') as string || 'Nigerian'}, 
-    ${email}, 
-    ${formData.get('mobilePhone') as string}, 
-    ${formData.get('residentialAddress') as string}, 
-    ${formData.get('tin') as string || null},
-    ${passportUrl},
-    ${idCardUrl}
-  )
-  RETURNING id
-`;
+    await sql`
+      INSERT INTO memberships (
+        title, surname, first_name, middle_name, date_of_birth, 
+        gender, nationality, email, tin, mobile_phone, residential_address, 
+        passport_url, id_card_url
+      )
+      VALUES (
+        ${formData.get('title') as string || 'Mr/Ms'}, 
+        ${surname}, ${firstName}, 
+        ${formData.get('middleName') as string || null}, 
+        ${formData.get('dateOfBirth') as string}, 
+        ${formData.get('gender') as string || 'Not Specified'},
+        ${formData.get('nationality') as string || 'Nigerian'}, 
+        ${email}, 
+        ${tin},
+        ${formData.get('mobilePhone') as string}, 
+        ${formData.get('residentialAddress') as string}, 
+        ${passportUrl}, ${idCardUrl}
+      )
+    `;
+    
     try {
       const emailHtml = await render(
         React.createElement(WelcomeMembershipEmail, { firstName, surname })
@@ -151,56 +139,72 @@ const membershipResult = await sql`
 }
 
 /**
- * ACTION: Create Loan Application (Smart Update/Insert)
+ * ACTION: Create Loan Application
+ */
+/**
+ * ACTION: Create Loan Application
  */
 export async function createLoan(prevState: any, formData: FormData) {
   try {
     const email = formData.get('email') as string;
     const surname = formData.get('surname') as string;
     const firstName = formData.get('firstName') as string;
+    const tin = formData.get('tin') as string || 'N/A'; 
+    
     const loanAmount = parseFloat(formData.get('loanAmount') as string) || 0;
     const duration = (formData.get('duration') as string) || '1 Month';
     const guarantorEmail = formData.get('guarantorEmail') as string;
     const guarantorName = formData.get('guarantorName') as string;
+    const guarantorOccupation = formData.get('guarantorOccupation') as string;
 
-    // File Uploads
-    const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
-    const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
-    const gPassportUrl = await uploadFile(formData.get('guarantorPassportFile') as File, 'guarantor_passports');
-    const gIdUrl = await uploadFile(formData.get('guarantorIdFile') as File, 'guarantor_ids');
+    // Check if this specific submission is intended to be a Guarantor addition
+    // We check if the form actually contains guarantor fields.
+    const isGuarantorSubmission = formData.has('guarantorName') && formData.get('guarantorName') !== '';
 
-    // Check if loan application exists
-    const existingLoan = await sql`SELECT id FROM loan_applications WHERE email = ${email} LIMIT 1`;
+    if (isGuarantorSubmission) {
+      // --- GUARANTOR SUBMISSION ---
+      const existingLoan = await sql`SELECT id FROM loan_applications WHERE email = ${email} ORDER BY request_date DESC LIMIT 1`;
+      
+      if (existingLoan.rows.length === 0) {
+        return { success: false, message: 'No active loan application found to attach a guarantor to.' };
+      }
 
-    if (existingLoan.rows.length > 0) {
-      // --- UPDATE EXISTING APPLICATION (Guarantor Phase) ---
       const loanId = existingLoan.rows[0].id;
+      const gPassportUrl = await uploadFile(formData.get('guarantorPassportFile') as File, 'guarantor_passports');
+      const gIdUrl = await uploadFile(formData.get('guarantorIdFile') as File, 'guarantor_ids');
+
       await sql`
-        UPDATE loan_applications 
-        SET 
-          guarantor_name = ${guarantorName},
-          guarantor_phone = ${formData.get('guarantorPhone') as string},
-          guarantor_relationship = ${formData.get('guarantorRelationship') as string},
-          guarantor_workplace = ${formData.get('guarantorWorkplace') as string},
-          guarantor_passport_url = COALESCE(${gPassportUrl}, guarantor_passport_url),
-          guarantor_id_url = COALESCE(${gIdUrl}, guarantor_id_url),
-          residential_address = ${formData.get('residentialAddress') as string}
-        WHERE id = ${loanId}
+        INSERT INTO loan_guarantors (
+          loan_id, guarantor_name, guarantor_email, guarantor_phone, 
+          guarantor_relationship, guarantor_workplace, guarantor_occupation,
+          residential_address, passport_url, id_card_url
+        )
+        VALUES (
+          ${loanId}, ${guarantorName}, ${guarantorEmail},
+          ${formData.get('guarantorPhone') as string},
+          ${formData.get('guarantorRelationship') as string},
+          ${formData.get('guarantorWorkplace') as string},
+          ${guarantorOccupation},
+          ${formData.get('residentialAddress') as string},
+          ${gPassportUrl}, ${gIdUrl}
+        )
       `;
     } else {
-      // --- CREATE NEW APPLICATION (Applicant Phase) ---
+      // --- INITIAL APPLICANT SUBMISSION (Includes Spouse Info) ---
+      const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
+      const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
+      
       const defaultDate = new Date();
       defaultDate.setDate(defaultDate.getDate() + 30);
       const repaymentDate = formData.get('repaymentDate') as string || defaultDate.toISOString().split('T')[0];
 
-      // Check member status
       const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
       let memberId = existingMember.rows[0]?.id;
       
       if (!memberId) {
         const newMember = await sql`
-          INSERT INTO memberships (surname, first_name, email, mobile_phone, residential_address, date_of_birth, gender, nationality)
-          VALUES (${surname}, ${firstName}, ${email}, ${formData.get('mobilePhone') as string}, ${formData.get('residentialAddress') as string}, ${formData.get('dateOfBirth') as string}, ${formData.get('gender') as string}, ${formData.get('nationality') as string})
+          INSERT INTO memberships (surname, first_name, email, tin, mobile_phone, residential_address, date_of_birth, gender, nationality)
+          VALUES (${surname}, ${firstName}, ${email}, ${tin}, ${formData.get('mobilePhone') as string}, ${formData.get('residentialAddress') as string}, ${formData.get('dateOfBirth') as string}, ${formData.get('gender') as string}, ${formData.get('nationality') as string})
           RETURNING id
         `;
         memberId = newMember.rows[0].id;
@@ -208,17 +212,15 @@ export async function createLoan(prevState: any, formData: FormData) {
 
       await sql`
         INSERT INTO loan_applications (
-          member_id, surname, first_name, middle_name, email, mobile_phone, loan_amount, duration, interest, 
-          bank_name, account_number, account_name, account_type, purpose_of_loan, repayment_date,
-          passport_url, id_card_url, status, request_date, residential_address,
-          date_of_birth, gender, nationality,
-          guarantor_name, guarantor_phone, guarantor_relationship, guarantor_workplace,
-          guarantor_passport_url, guarantor_id_url,
-          spouse_title, spouse_name, spouse_phone, spouse_dob, 
-          spouse_gender, spouse_nationality, spouse_state, spouse_lga, spouse_address
+          member_id, title, surname, first_name, middle_name, email, tin, mobile_phone, 
+          loan_amount, duration, interest, bank_name, account_number, account_name, 
+          account_type, purpose_of_loan, repayment_date, passport_url, id_card_url, 
+          status, request_date, residential_address, date_of_birth, gender, nationality,
+          spouse_title, spouse_name, spouse_phone, spouse_dob, spouse_gender, 
+          spouse_nationality, spouse_state, spouse_lga, spouse_address
         )
         VALUES (
-          ${memberId}, ${surname}, ${firstName}, ${formData.get('middleName') as string || null}, ${email}, ${formData.get('mobilePhone') as string},
+          ${memberId}, ${surname}, ${firstName}, ${formData.get('middleName') as string || null}, ${email}, ${tin}, ${formData.get('mobilePhone') as string},
           ${loanAmount}, ${duration}, ${formData.get('interest') as string || '15%'}, 
           ${formData.get('bankName') as string || 'N/A'}, 
           ${formData.get('accountNumber') as string || '0000000000'}, 
@@ -226,16 +228,10 @@ export async function createLoan(prevState: any, formData: FormData) {
           ${formData.get('accountType') as string || 'Savings'},
           ${formData.get('purposeOfLoan') as string || 'General'}, 
           ${repaymentDate}, 
-          ${passportUrl}, ${idCardUrl}, 'pending', 
-          CURRENT_DATE, 
+          ${passportUrl}, ${idCardUrl}, 'pending', CURRENT_DATE, 
           ${formData.get('residentialAddress') as string},
-          ${formData.get('dateOfBirth') as string}, 
-          ${formData.get('gender') as string},
+          ${formData.get('dateOfBirth') as string}, ${formData.get('gender') as string},
           ${formData.get('nationality') as string},
-          ${guarantorName || 'N/A'}, ${formData.get('guarantorPhone') as string || 'N/A'}, 
-          ${formData.get('guarantorRelationship') as string || 'N/A'},
-          ${formData.get('guarantorWorkplace') as string || 'N/A'},
-          ${gPassportUrl}, ${gIdUrl},
           ${formData.get('spouseTitle') as string || null}, ${formData.get('spouseName') as string || null},
           ${formData.get('spousePhone') as string || null}, ${formData.get('spouseDOB') as string || null},
           ${formData.get('spouseGender') as string || null}, ${formData.get('spouseNationality') as string || null},
@@ -244,15 +240,14 @@ export async function createLoan(prevState: any, formData: FormData) {
         )
       `;
 
-      // Email Applicant
       try {
         const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName, loanAmount: loanAmount.toLocaleString('en-NG'), duration }));
         await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
       } catch (e) { console.error("App email fail:", e); }
     }
 
-    // --- SEND GUARANTOR EMAIL (If applicable) ---
-    if (guarantorEmail && guarantorEmail.includes('@')) {
+    // Only send the Guarantor Email if it was a Guarantor Submission
+    if (isGuarantorSubmission && guarantorEmail && guarantorEmail.includes('@')) {
       try {
         const guarantorHtml = await render(React.createElement(GuarantorConfirmationEmail, {
           guarantorName: guarantorName || 'Guarantor',
@@ -269,6 +264,7 @@ export async function createLoan(prevState: any, formData: FormData) {
     }
 
     revalidatePath('/dashboard/loans');
+    revalidatePath('/dashboard/active-loans');
     revalidatePath('/dashboard/guarantors');
     return { success: true, message: 'Loan processed successfully!' };
   } catch (error: any) {
@@ -276,7 +272,6 @@ export async function createLoan(prevState: any, formData: FormData) {
     return { success: false, message: `System Error: ${error.message}` };
   }
 }
-
 /**
  * ACTION: Update Loan Status
  */
@@ -313,9 +308,74 @@ export async function updateLoanStatus(loanId: string, status: 'active' | 'rejec
   }
 }
 
-/**
- * ADMIN FETCHERS
- */
+export async function fetchActiveLoans(query?: string) {
+  try {
+    const data = await sql`
+      SELECT 
+        id, first_name, surname, email, loan_amount, interest, 
+        repayment_date, tin, status,
+        COALESCE(amount_paid, 0) AS amount_paid, 
+        last_payment_date
+      FROM loan_applications 
+      WHERE (status ILIKE 'active' OR status ILIKE 'pending' OR status ILIKE 'approved')
+      AND (
+        tin ILIKE ${'%' + query + '%'} OR 
+        first_name ILIKE ${'%' + query + '%'} OR 
+        surname ILIKE ${'%' + query + '%'}
+      )
+      ORDER BY request_date DESC
+    `;
+    return data.rows;
+  } catch (error) {
+    console.error('Detailed Database Error:', error); 
+    return [];
+  }
+}
+
+export async function updateLoanPayment(id: string, newPayment: number) {
+  try {
+    await sql`
+      UPDATE loan_applications
+      SET 
+        amount_paid = COALESCE(amount_paid, 0) + ${newPayment},
+        last_payment_date = NOW()
+      WHERE id = ${id}
+    `;
+    revalidatePath('/dashboard/active-loans'); 
+    return { success: true };
+  } catch (error) {
+    console.error('Database Error:', error);
+    return { success: false };
+  }
+}
+
+export async function fetchGuarantors(query: string = '') {
+  try {
+    const data = await sql`
+      SELECT 
+        g.id, g.guarantor_name, g.guarantor_phone, g.guarantor_relationship, 
+        g.passport_url as guarantor_passport_url, g.id_card_url as guarantor_id_url, 
+        g.created_at as request_date, g.status, l.first_name, l.surname, l.loan_amount 
+      FROM loan_guarantors g
+      JOIN loan_applications l ON g.loan_id = l.id
+      WHERE (g.guarantor_name ILIKE ${'%' + query + '%'} OR l.first_name ILIKE ${'%' + query + '%'}) 
+      ORDER BY g.created_at DESC
+    `;
+    return data.rows;
+  } catch (error) { return []; }
+}
+
+export async function verifyGuarantorAction(guarantorId: string) {
+  try {
+    await sql`UPDATE loan_guarantors SET status = 'verified' WHERE id = ${guarantorId}`;
+    revalidatePath('/dashboard/guarantors'); 
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to verify guarantor:', error);
+    return { success: false };
+  }
+}
+
 export async function getPendingCount(): Promise<number> {
   try {
     const data = await sql`SELECT COUNT(*) FROM loan_applications WHERE status = 'pending'`;
@@ -335,21 +395,6 @@ export async function getTodaysLoans() {
   } catch (error) { return []; }
 }
 
-export async function fetchGuarantors(query: string = '') {
-  try {
-    const data = await sql`
-      SELECT id, first_name, surname, guarantor_name, guarantor_phone, 
-             guarantor_relationship, guarantor_passport_url, guarantor_id_url, request_date
-      FROM loan_applications
-      WHERE (guarantor_name ILIKE ${'%' + query + '%'} OR first_name ILIKE ${'%' + query + '%'}) 
-      AND guarantor_name IS NOT NULL
-      AND status = 'pending'
-      ORDER BY request_date DESC
-    `;
-    return data.rows;
-  } catch (error) { return []; }
-}
-
 export async function fetchInvestments() {
   const data = await sql`
     SELECT i.*, m.first_name, m.surname FROM investments i 
@@ -363,9 +408,6 @@ export async function approveInvestment(investmentId: string) {
   return { success: true };
 }
 
-/**
- * AUTH
- */
 export async function authenticate(prevState: string | undefined, formData: FormData) {
   try { await signIn('credentials', formData); } 
   catch (error) {

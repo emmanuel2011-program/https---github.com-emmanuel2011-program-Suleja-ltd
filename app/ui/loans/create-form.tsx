@@ -148,6 +148,10 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       if (!form.gender) return "Please select your gender.";
       if (!isValidEmail(form.email)) return "Please enter a valid email address.";
       if (!isValidPhone(form.mobilePhone)) return "Mobile phone must be exactly 11 digits.";
+      if (!form.tin) return "Tax Identification Number (TIN) is required.";
+      if (form.tin.length < 11 || form.tin.length < 13) {
+      return "TIN must be between 11 and 13 digits.";
+      }
       if (!form.residentialAddress.trim()) return "Residential address is required.";
       if (!form.dateOfBirth) return "Date of Birth is required.";
     }
@@ -205,7 +209,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       formData.append('residentialAddress', form.residentialAddress);
       formData.append('gender', form.gender);
       formData.append('occupation', form.occupation);
-      formData.append('tin', form.tin);
+      formData.append('tin', form.tin.trim() || '');
       formData.append('bankName', form.bankName);
       formData.append('accountNumber', form.accountNumber);
       formData.append('accountName', form.accountName);
@@ -281,7 +285,21 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               </select>
               <input type="email" placeholder="Email Address *" value={form.email} onChange={e => update('email', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               <input type="tel" placeholder="Mobile Phone (11 digits) *" value={form.mobilePhone} onChange={e => update('mobilePhone', e.target.value.replace(/\D/g, '').slice(0, 11))} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
-              <input type="text" placeholder="TIN (Tax Identification Number)" value={form.tin} onChange={e => update('tin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" />
+              <div className="relative">
+              <input 
+                  type="text" 
+                  placeholder="TIN (Tax Identification Number) *" 
+                  value={form.tin} 
+                  // Only allow numbers and limit to 13 characters
+                  onChange={e => update('tin', e.target.value.replace(/[^\d-]/g, '').slice(0, 13))} 
+                  className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" 
+                  required
+                />
+                {/* Visual counter to help the user */}
+                <span className={`absolute right-3 top-2.5 text-[10px] font-bold ${form.tin.length >= 11 && form.tin.length <= 13 ? 'text-green-600' : 'text-gray-400'}`}>
+                  {form.tin.length}/11-13
+                </span>
+              </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] text-gray-500 uppercase font-bold ml-1">Date of Birth *</label>
                 <input type="date" value={form.dateOfBirth} onChange={e => update('dateOfBirth', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />

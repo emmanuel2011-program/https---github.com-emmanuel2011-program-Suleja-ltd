@@ -7,7 +7,9 @@ import {
   UsersIcon, 
   HomeIcon,
   BanknotesIcon,
-  UserGroupIcon // Added for Guarantors
+  UserGroupIcon,
+  // ADD THIS ICON:
+  BriefcaseIcon 
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -17,7 +19,9 @@ const links = [
   { name: 'Home', href: '/dashboard', icon: HomeIcon },
   { name: 'Membership', href: '/dashboard/membership', icon: IdentificationIcon },
   { name: 'Investments', href: '/dashboard/investments', icon: BanknotesIcon },
-  { name: 'Guarantors', href: '/dashboard/guarantors', icon: UserGroupIcon }, // New Link
+  // THIS IS YOUR NEW LINK:
+  { name: 'Active Portfolio', href: '/dashboard/active-loans', icon: BriefcaseIcon },
+  { name: 'Guarantors', href: '/dashboard/guarantors', icon: UserGroupIcon }, 
   { name: 'Customers', href: '/dashboard/customer', icon: UsersIcon },
   { name: 'Contacts', href: '/dashboard/contacts', icon: PhoneIcon },
   { name: 'About', href: '/dashboard/about', icon: InformationCircleIcon },
@@ -35,7 +39,6 @@ export default function NavLinks() {
             key={link.name}
             href={link.href}
             className={clsx(
-              // Mobile: flex-col with small text. Desktop: flex-row.
               'flex h-[48px] min-w-[75px] flex-shrink-0 flex-col items-center justify-center gap-1 rounded-md bg-gray-50 p-2 text-[10px] font-medium hover:bg-sky-100 hover:text-blue-600 md:h-[48px] md:min-w-0 md:flex-row md:justify-start md:gap-3 md:px-3 md:text-sm',
               {
                 'bg-sky-100 text-blue-600': pathname === link.href,

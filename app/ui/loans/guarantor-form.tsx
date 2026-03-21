@@ -126,7 +126,8 @@ export default function GuarantorForm() {
         <div className="flex items-center gap-2 mb-1">
           <ShieldCheckIcon className="h-4 w-4 text-gray-600" />
           <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Guarantor Information</p>
-        </div>
+        </div>      
+        
 
         <div className="relative">
           <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -156,7 +157,24 @@ export default function GuarantorForm() {
           <BriefcaseIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <input name="guarantorWorkplace" type="text" placeholder="Guarantor Workplace *" className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" required />
         </div>
-
+        <div className="relative">
+          <BriefcaseIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <select 
+            name="guarantorOccupation" 
+            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white transition-all appearance-none"
+            required
+      >
+          <option value="" disabled selected>Select Guarantor Occupation *</option>
+          <option value="Clergy">Clergy</option>
+          <option value="Businessperson">Businessperson</option>
+          <option value="Civil Servant">Civil Servant</option>
+          <option value="Others">Others</option>
+        </select>
+        {/* Custom arrow for the select since we used appearance-none */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+        <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+        </div>
+      </div>
         <div className="relative">
           <MapPinIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <textarea name="residentialAddress" placeholder="Guarantor Residential Address *" rows={2} className="w-full pl-10 pr-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all" required />

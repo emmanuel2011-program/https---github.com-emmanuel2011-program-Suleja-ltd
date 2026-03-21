@@ -59,7 +59,7 @@ export const LoanStatusEmail = ({
       <Body style={{ backgroundColor: '#f6f9fc', padding: '20px', fontFamily: 'sans-serif' }}>
         <Container style={{ backgroundColor: '#ffffff', border: '1px solid #e1e1e1', padding: '40px', borderRadius: '10px' }}>
           <Heading style={{ color: isApproved ? '#166534' : '#991b1b', fontSize: '22px' }}>
-            Loan Application {isApproved ? 'Statement' : 'Update'}
+            Loan Award Letter has been Approved view Your {isApproved ? 'Statement' : 'Update'}
           </Heading>
           
           <Text>Hello {firstName}, Your loan has been <strong>{status}</strong>.</Text>
