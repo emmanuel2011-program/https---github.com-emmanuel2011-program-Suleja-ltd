@@ -358,11 +358,17 @@ export async function fetchGuarantors(query: string = '') {
         g.created_at as request_date, g.status, l.first_name, l.surname, l.loan_amount 
       FROM loan_guarantors g
       JOIN loan_applications l ON g.loan_id = l.id
-      WHERE (g.guarantor_name ILIKE ${'%' + query + '%'} OR l.first_name ILIKE ${'%' + query + '%'}) 
+      WHERE 
+        -- THIS IS THE FILTER:
+        (g.status IS NULL OR g.status != 'verified') 
+        AND (g.guarantor_name ILIKE ${'%' + query + '%'} OR l.first_name ILIKE ${'%' + query + '%'}) 
       ORDER BY g.created_at DESC
     `;
     return data.rows;
-  } catch (error) { return []; }
+  } catch (error) { 
+    console.error('Fetch Guarantors Error:', error);
+    return []; 
+  }
 }
 
 export async function verifyGuarantorAction(guarantorId: string) {
