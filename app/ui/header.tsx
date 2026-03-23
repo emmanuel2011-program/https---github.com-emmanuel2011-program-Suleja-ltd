@@ -10,6 +10,8 @@ import {
   ArrowRightOnRectangleIcon, 
   ArrowLeftOnRectangleIcon,
   EnvelopeIcon,
+  UserIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import { signOut } from 'next-auth/react';
 import WeatherSnippet from '@/app/ui/weather-snippet';
@@ -58,7 +60,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
           </div>
         </div>
 
-        {/* Desktop Navigation (Hidden on Mobile) */}
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-2 text-sm">
           <NavLink href="/">Home</NavLink>
           <NavLink href="/membership">Memberships</NavLink>
@@ -83,7 +85,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
             </Link>
           )}
           
-          <div className="ml-4 border-l pl-4 border-green-200">
+          <div className="ml-4 border-l pl-4 border-green-200 flex gap-2">
             {session ? (
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
@@ -93,44 +95,34 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
                 <ArrowLeftOnRectangleIcon className="h-4 w-4" />
               </button>
             ) : (
-              <Link
-                href="/login"
-                className="flex items-center gap-2 rounded-full bg-green-700 px-5 py-2 text-white hover:bg-green-800 shadow-md transition-all text-xs font-bold"
-              >
-                <span>Admin Login</span>
-                <ArrowRightOnRectangleIcon className="h-4 w-4" />
-              </Link>
+              <>
+                {/* Updated Investor Login with role parameter */}
+                <Link
+                  href="/login?role=investor"
+                  className="flex items-center gap-2 rounded-full border border-green-600 px-4 py-2 text-green-700 hover:bg-green-100 transition-all text-xs font-bold"
+                >
+                  <UserIcon className="h-4 w-4" />
+                  <span>Investor Login</span>
+                </Link>
+
+                {/* Updated Admin Login with role parameter */}
+                <Link
+                  href="/login?role=admin"
+                  className="flex items-center gap-2 rounded-full bg-green-700 px-4 py-2 text-white hover:bg-green-800 shadow-md transition-all text-xs font-bold"
+                >
+                  <ShieldCheckIcon className="h-4 w-4" />
+                  <span>Admin Login</span>
+                </Link>
+              </>
             )}
           </div>
         </nav>
 
-        {/* Mobile View Items (Always visible on small screens) */}
+        {/* Mobile Toggle */}
         <div className="flex items-center gap-3 md:hidden">
-          {/* Mobile Weather */}
           <div className="scale-75 sm:scale-90 origin-right">
             <WeatherSnippet />
           </div>
-          
-          {/* MOBILE ENVELOPE - Added here for visibility on small screens */}
-          {isAdmin && (
-            <Link 
-              href="/dashboard/loans" 
-              className={`relative p-2 rounded-lg transition-colors border ${
-                pathname.includes('/dashboard/loans') 
-                  ? 'bg-green-600 text-white border-green-600 shadow-sm' 
-                  : 'text-green-700 bg-white border-green-100'
-              }`}
-            >
-              <EnvelopeIcon className="h-6 w-6" />
-              {pendingCount > 0 && (
-                <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
-                  {pendingCount}
-                </span>
-              )}
-            </Link>
-          )}
-
-          {/* Hamburger Toggle */}
           <button
             className="p-2 text-green-700 hover:bg-green-100 rounded-lg border border-green-100"
             onClick={() => setMenuOpen(!menuOpen)}
@@ -142,7 +134,7 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
 
       {/* Mobile Menu Dropdown */}
       {menuOpen && (
-        <nav className="mt-4 flex flex-col gap-1 md:hidden border-t border-green-100 pt-4 animate-in slide-in-from-top duration-200">
+        <nav className="mt-4 flex flex-col gap-1 md:hidden border-t border-green-100 pt-4">
           <NavLink href="/">Home</NavLink>
           <NavLink href="/membership">Memberships</NavLink>
           <NavLink href="/loans">Loans</NavLink>
@@ -150,37 +142,36 @@ export default function Header({ session, pendingCount = 0 }: { session: any; pe
 
           {session && <NavLink href="/dashboard">Dashboard</NavLink>}
 
-          {isAdmin && (
-            <NavLink href="/dashboard/loans">
-              <div className="flex items-center justify-between w-full">
-                <span>Loan Applications</span>
-                {pendingCount > 0 && (
-                  <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                    {pendingCount}
-                  </span>
-                )}
-              </div>
-            </NavLink>
-          )}
-
-          <div className="pt-4 mt-2 border-t border-green-100">
+          <div className="pt-4 mt-2 border-t border-green-100 flex flex-col gap-2">
             {session ? (
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="w-full flex items-center justify-between rounded-md bg-red-50 px-4 py-3 text-red-600 font-bold text-sm border border-red-100"
+                className="w-full flex items-center justify-between rounded-md bg-red-50 px-4 py-3 text-red-600 font-bold border border-red-100"
               >
                 <span>Logout</span>
                 <ArrowLeftOnRectangleIcon className="h-5 w-5" />
               </button>
             ) : (
-              <Link
-                href="/login"
-                onClick={() => setMenuOpen(false)}
-                className="w-full flex items-center justify-between rounded-md bg-green-700 px-4 py-3 text-white font-bold text-sm shadow-md"
-              >
-                <span>Admin Login</span>
-                <ArrowRightOnRectangleIcon className="h-5 w-5" />
-              </Link>
+              <>
+                {/* Mobile Investor Login */}
+                <Link
+                  href="/login?role=investor"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full flex items-center justify-between rounded-md border border-green-600 px-4 py-3 text-green-700 font-bold"
+                >
+                  <span>Investor Login</span>
+                  <UserIcon className="h-5 w-5" />
+                </Link>
+                {/* Mobile Admin Login */}
+                <Link
+                  href="/login?role=admin"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full flex items-center justify-between rounded-md bg-green-700 px-4 py-3 text-white font-bold"
+                >
+                  <span>Admin Login</span>
+                  <ShieldCheckIcon className="h-5 w-5" />
+                </Link>
+              </>
             )}
           </div>
         </nav>

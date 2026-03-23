@@ -1,20 +1,37 @@
 'use server';
 
 import React from 'react';
-import { signIn } from '@/auth';
+import { signIn, auth } from '@/auth';
 import { AuthError } from 'next-auth';
 import { sql } from '@vercel/postgres';
+import bcrypt from 'bcrypt';
 import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
 import { render } from '@react-email/render';
+import { redirect } from 'next/navigation';
 
-// IMPORT YOUR EMAIL COMPONENTS
+// Email Components
 import { WelcomeMembershipEmail } from '@/app/ui/emails/welcome-membership';
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation'; 
 import { LoanStatusEmail } from '@/app/ui/emails/loan-status';
 import { GuarantorConfirmationEmail } from '@/app/ui/emails/guarantor-confirmation';
 
+
+// Helper to get the current user and determine if they are an admin
+async function getSessionInfo() {
+  const session = await auth();
+  if (!session?.user?.email) return null;
+
+  // Define your admin email here
+  const adminEmail = 'admin@shhmcsoc.me'; 
+  const isAdmin = session.user.email.toLowerCase() === adminEmail.toLowerCase();
+
+  return {
+    email: session.user.email.toLowerCase(),
+    isAdmin,
+  };
+}
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
@@ -36,6 +53,30 @@ async function uploadFile(file: File | null, path: string) {
   return null;
 }
 
+export async function registerUser(formData: FormData) {
+  const firstName = formData.get('firstName') as string;
+  const surname = formData.get('surname') as string;
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const role = formData.get('role') as string; // Get the selected role
+
+  // 1. Hash the password
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  try {
+    // 2. Insert with the chosen role
+    await sql`
+      INSERT INTO users (first_name, surname, email, password, role)
+      VALUES (${firstName}, ${surname}, ${email}, ${hashedPassword}, ${role})
+    `;
+  } catch (error) {
+    console.error('Database Error:', error);
+    return { message: 'Failed to create account. This email may already be in use.' };
+  }
+
+  // 3. Redirect to login
+  redirect('/login');
+}
 /**
  * ACTION: Create Investment
  */
@@ -88,59 +129,78 @@ export async function createInvestment(formData: FormData): Promise<{ success: b
 /**
  * ACTION: Create Membership
  */
+export type ActionResponse = {
+  success: boolean;
+  message: string;
+};
+
+
+// app/lib/actions.ts
+
 export async function createMembership(formData: FormData) {
   try {
-    const firstName = formData.get('firstName') as string;
-    const surname = formData.get('surname') as string;
-    const email = formData.get('email') as string;
-    const tin = formData.get('tin') as string || 'N/A';
+    // 1. Upload files first
+    const passport_url = await uploadFile(formData.get('passportFile') as File, 'passports');
+    const id_card_url = await uploadFile(formData.get('idCardFile') as File, 'ids');
 
-    const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
-    const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
+    // 2. Extract and format data
+    const email = (formData.get('email') as string).toLowerCase();
+    const tin = (formData.get('tin') as string) || 'N/A';
+    const membershipType = (formData.get('membershipType') as string) || 'Nominal';
 
+    // 3. Execute SQL - matching your column names EXACTLY
     await sql`
       INSERT INTO memberships (
-        title, surname, first_name, middle_name, date_of_birth, 
-        gender, nationality, email, tin, mobile_phone, residential_address, 
-        passport_url, id_card_url
+        member_id, 
+        title, 
+        surname, 
+        first_name, 
+        middle_name, 
+        date_of_birth, 
+        gender, 
+        nationality, 
+        residential_address, 
+        tin, 
+        email, 
+        mobile_phone, 
+        passport_url, 
+        id_card_url, 
+        membership_type
       )
       VALUES (
-        ${formData.get('title') as string || 'Mr/Ms'}, 
-        ${surname}, ${firstName}, 
-        ${formData.get('middleName') as string || null}, 
+        ${formData.get('member_id') as string || null}, 
+        ${formData.get('title') as string}, 
+        ${formData.get('surname') as string}, 
+        ${formData.get('firstName') as string}, 
+        ${formData.get('middle_name') as string || null}, 
         ${formData.get('dateOfBirth') as string}, 
-        ${formData.get('gender') as string || 'Not Specified'},
+        ${formData.get('gender') as string},
         ${formData.get('nationality') as string || 'Nigerian'}, 
-        ${email}, 
-        ${tin},
-        ${formData.get('mobilePhone') as string}, 
         ${formData.get('residentialAddress') as string}, 
-        ${passportUrl}, ${idCardUrl}
+        ${tin},
+        ${email}, 
+        ${formData.get('mobilePhone') as string}, 
+        ${passport_url}, 
+        ${id_card_url}, 
+        ${membershipType}
       )
     `;
-    
-    try {
-      const emailHtml = await render(
-        React.createElement(WelcomeMembershipEmail, { firstName, surname })
-      );
-      await resend.emails.send({
-        from: 'SHHMCSOC Support <noreply@shhmcsoc.me>',
-        to: [email],
-        subject: 'Welcome to the Cooperative - SHHMCSOC',
-        html: emailHtml,
-      });
-    } catch (e) { console.error("Welcome email failed:", e); }
 
-    revalidatePath('/dashboard/memberships');
-    return { success: true };
+    // 4. Return success for the toast notification
+    return { 
+      success: true, 
+      message: 'Membership created successfully!' 
+    };
+
   } catch (error: any) {
-    return { success: false, message: 'Database Error: ' + error.message };
+    console.error('Database Error:', error);
+    return {
+      success: false,
+      message: 'Failed to create membership. Please check your details.',
+    };
   }
 }
 
-/**
- * ACTION: Create Loan Application
- */
 /**
  * ACTION: Create Loan Application
  */
@@ -148,28 +208,16 @@ export async function createLoan(prevState: any, formData: FormData) {
   try {
     const email = formData.get('email') as string;
     const surname = formData.get('surname') as string;
-    const firstName = formData.get('firstName') as string;
-    const tin = formData.get('tin') as string || 'N/A'; 
+    const first_name = formData.get('first_name') as string;
     
-    const loanAmount = parseFloat(formData.get('loanAmount') as string) || 0;
-    const duration = (formData.get('duration') as string) || '1 Month';
-    const guarantorEmail = formData.get('guarantorEmail') as string;
-    const guarantorName = formData.get('guarantorName') as string;
-    const guarantorOccupation = formData.get('guarantorOccupation') as string;
-
-    // Check if this specific submission is intended to be a Guarantor addition
-    // We check if the form actually contains guarantor fields.
     const isGuarantorSubmission = formData.has('guarantorName') && formData.get('guarantorName') !== '';
 
     if (isGuarantorSubmission) {
       // --- GUARANTOR SUBMISSION ---
       const existingLoan = await sql`SELECT id FROM loan_applications WHERE email = ${email} ORDER BY request_date DESC LIMIT 1`;
-      
-      if (existingLoan.rows.length === 0) {
-        return { success: false, message: 'No active loan application found to attach a guarantor to.' };
-      }
+      if (existingLoan.rows.length === 0) return { success: false, message: 'No active loan application found.' };
 
-      const loanId = existingLoan.rows[0].id;
+      const loan_id = existingLoan.rows[0].id;
       const gPassportUrl = await uploadFile(formData.get('guarantorPassportFile') as File, 'guarantor_passports');
       const gIdUrl = await uploadFile(formData.get('guarantorIdFile') as File, 'guarantor_ids');
 
@@ -180,87 +228,104 @@ export async function createLoan(prevState: any, formData: FormData) {
           residential_address, passport_url, id_card_url
         )
         VALUES (
-          ${loanId}, ${guarantorName}, ${guarantorEmail},
-          ${formData.get('guarantorPhone') as string},
-          ${formData.get('guarantorRelationship') as string},
-          ${formData.get('guarantorWorkplace') as string},
-          ${guarantorOccupation},
-          ${formData.get('residentialAddress') as string},
-          ${gPassportUrl}, ${gIdUrl}
+          ${loan_id}, ${formData.get('guarantorName') as string}, ${formData.get('guarantorEmail') as string},
+          ${formData.get('guarantorPhone') as string}, ${formData.get('guarantorRelationship') as string},
+          ${formData.get('guarantorWorkplace') as string}, ${formData.get('guarantorOccupation') as string},
+          ${formData.get('residential_address') as string}, ${gPassportUrl}, ${gIdUrl}
         )
       `;
-    } else {
-      // --- INITIAL APPLICANT SUBMISSION (Includes Spouse Info) ---
-      const passportUrl = await uploadFile(formData.get('passportFile') as File, 'passports');
-      const idCardUrl = await uploadFile(formData.get('idCardFile') as File, 'ids');
+    } 
+    
+    else {
+      // --- INITIAL APPLICANT SUBMISSION ---
+      const passport_url = await uploadFile(formData.get('passportFile') as File, 'passports');
+      const id_card_url = await uploadFile(formData.get('idCardFile') as File, 'ids');
       
-      const defaultDate = new Date();
-      defaultDate.setDate(defaultDate.getDate() + 30);
-      const repaymentDate = formData.get('repaymentDate') as string || defaultDate.toISOString().split('T')[0];
-
       const existingMember = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
-      let memberId = existingMember.rows[0]?.id;
+      let member_id = existingMember.rows[0]?.id;
       
-      if (!memberId) {
+      if (!member_id) {
         const newMember = await sql`
-          INSERT INTO memberships (surname, first_name, email, tin, mobile_phone, residential_address, date_of_birth, gender, nationality)
-          VALUES (${surname}, ${firstName}, ${email}, ${tin}, ${formData.get('mobilePhone') as string}, ${formData.get('residentialAddress') as string}, ${formData.get('dateOfBirth') as string}, ${formData.get('gender') as string}, ${formData.get('nationality') as string})
+          INSERT INTO memberships (surname, first_name, email, mobile_phone, residential_address)
+          VALUES (${surname}, ${first_name}, ${email}, ${formData.get('mobile_phone') as string}, ${formData.get('residential_address') as string})
           RETURNING id
         `;
-        memberId = newMember.rows[0].id;
+        member_id = newMember.rows[0].id;
       }
+
+      // 1. DATA EXTRACTION & FALLBACKS (Fixes the naming mismatches)
+      const loan_amount = parseFloat(formData.get('loan_amount') as string) || 0;
+      const reqDate = (formData.get('request_date') || new Date().toISOString().split('T')[0]) as string;
+      const purpose = (formData.get('purpose_of_loan') || formData.get('purpose_of_Loan') || 'Business') as string;
+      const repayDate = (formData.get('repayment_date') || formData.get('repaymentDate') || reqDate) as string;
+      const bName = (formData.get('bank_name') || formData.get('bankName')) as string;
+      const accNum = (formData.get('account_number') || formData.get('accountNumber') || formData.get('accoun_number')) as string;
+      const accName = (formData.get('account_name') || formData.get('accountName')) as string;
 
       await sql`
         INSERT INTO loan_applications (
-          member_id, title, surname, first_name, middle_name, email, tin, mobile_phone, 
-          loan_amount, duration, interest, bank_name, account_number, account_name, 
-          account_type, purpose_of_loan, repayment_date, passport_url, id_card_url, 
-          status, request_date, residential_address, date_of_birth, gender, nationality,
-          spouse_title, spouse_name, spouse_phone, spouse_dob, spouse_gender, 
-          spouse_nationality, spouse_state, spouse_lga, spouse_address
+          id, member_id, surname, first_name, middle_name, 
+          date_of_birth, gender, nationality, tin, email, 
+          mobile_phone, loan_amount, request_date, duration, interest, 
+          purpose_of_loan, repayment_date, bank_name, account_number, account_name, 
+          account_type, passport_url, id_card_url, status, spouse_name, 
+          spouse_mobile_phone, spouse_title, spouse_dob, spouse_gender, spouse_nationality, 
+          spouse_state_of_origin, spouse_lga, spouse_marital_status, spouse_residential_address, expiration_date, 
+          spouse_state, spouse_address, spouse_phone, amount_paid, last_payment_date, 
+          your_title, state_of_origin, lga, full_residential_address
         )
         VALUES (
-          ${memberId}, ${surname}, ${firstName}, ${formData.get('middleName') as string || null}, ${email}, ${tin}, ${formData.get('mobilePhone') as string},
-          ${loanAmount}, ${duration}, ${formData.get('interest') as string || '15%'}, 
-          ${formData.get('bankName') as string || 'N/A'}, 
-          ${formData.get('accountNumber') as string || '0000000000'}, 
-          ${formData.get('accountName') as string || (firstName + ' ' + surname)}, 
-          ${formData.get('accountType') as string || 'Savings'},
-          ${formData.get('purposeOfLoan') as string || 'General'}, 
-          ${repaymentDate}, 
-          ${passportUrl}, ${idCardUrl}, 'pending', CURRENT_DATE, 
-          ${formData.get('residentialAddress') as string},
-          ${formData.get('dateOfBirth') as string}, ${formData.get('gender') as string},
-          ${formData.get('nationality') as string},
-          ${formData.get('spouseTitle') as string || null}, ${formData.get('spouseName') as string || null},
-          ${formData.get('spousePhone') as string || null}, ${formData.get('spouseDOB') as string || null},
-          ${formData.get('spouseGender') as string || null}, ${formData.get('spouseNationality') as string || null},
-          ${formData.get('spouseState') as string || null}, ${formData.get('spouseLGA') as string || null},
-          ${formData.get('spouseAddress') as string || null}
+          uuid_generate_v4(), 
+          ${member_id},
+          ${surname},
+          ${first_name},
+          ${formData.get('middle_name') as string || null}, 
+          ${formData.get('date_of_birth') as string}, 
+          ${formData.get('gender') as string},
+          ${formData.get('nationality') as string || 'Nigerian'}, 
+          ${formData.get('tin') as string || 'N/A'},
+          ${email}, 
+          ${formData.get('mobile_phone') as string}, 
+          ${loan_amount}, 
+          ${reqDate}, 
+          ${formData.get('duration') as string}, 
+          ${formData.get('interest') as string || '15%'}, 
+          ${purpose}, 
+          ${repayDate}, 
+          ${bName}, 
+          ${accNum}, 
+          ${accName}, 
+          ${formData.get('account_type') as string}, 
+          ${passport_url}, 
+          ${id_card_url}, 
+          'pending', 
+          ${formData.get('spouse_name') as string || null}, 
+          ${formData.get('spouse_mobile_phone') as string || null}, 
+          ${formData.get('spouse_title') as string || null}, 
+          ${formData.get('spouse_dob') as string || null}, 
+          ${formData.get('spouse_gender') as string || null}, 
+          ${formData.get('spouse_nationality') as string || null}, 
+          ${formData.get('spouse_state_of_origin') as string || null}, 
+          ${formData.get('spouse_lga') as string || null}, 
+          ${formData.get('spouse_marital_status') as string || null}, 
+          ${formData.get('spouse_residential_address') as string || null}, 
+          null, 
+          null, 
+          null, 
+          null, 
+          0, 
+          null, 
+          ${formData.get('your_title') as string}, 
+          ${formData.get('state_of_origin') as string}, 
+          ${formData.get('lga') as string}, 
+          ${formData.get('full_residential_address') as string} 
         )
       `;
 
       try {
-        const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName, loanAmount: loanAmount.toLocaleString('en-NG'), duration }));
+        const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName: first_name, loanAmount: loan_amount.toLocaleString('en-NG'), duration: formData.get('duration') as string }));
         await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
       } catch (e) { console.error("App email fail:", e); }
-    }
-
-    // Only send the Guarantor Email if it was a Guarantor Submission
-    if (isGuarantorSubmission && guarantorEmail && guarantorEmail.includes('@')) {
-      try {
-        const guarantorHtml = await render(React.createElement(GuarantorConfirmationEmail, {
-          guarantorName: guarantorName || 'Guarantor',
-          applicantName: `${firstName} ${surname}`,
-          loanAmount: loanAmount,
-        }));
-        await resend.emails.send({
-          from: 'SHHMCSOC Support <noreply@shhmcsoc.me>',
-          to: [guarantorEmail],
-          subject: 'Guarantor Acknowledgment - SHHMCSOC',
-          html: guarantorHtml,
-        });
-      } catch (e) { console.error("Guarantor email fail:", e); }
     }
 
     revalidatePath('/dashboard/loans');
@@ -272,6 +337,7 @@ export async function createLoan(prevState: any, formData: FormData) {
     return { success: false, message: `System Error: ${error.message}` };
   }
 }
+
 /**
  * ACTION: Update Loan Status
  */
@@ -332,6 +398,51 @@ export async function fetchActiveLoans(query?: string) {
   }
 }
 
+
+// Inside app/lib/actions.ts
+const ITEMS_PER_PAGE = 6;
+
+export async function fetchFilteredLoans(
+  query: string,
+  currentPage: number,
+  userEmail?: string, // Add this
+  userRole?: string   // Add this
+){
+  const ITEMS_PER_PAGE = 6;
+  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+
+  try {
+    if (userRole === 'admin') {
+      // ADMIN: Sees everyone's loans
+      const loans = await sql`
+        SELECT * FROM loan_applications
+        WHERE
+          (first_name ILIKE ${`%${query}%`} OR
+          surname ILIKE ${`%${query}%`} OR
+          email ILIKE ${`%${query}%`})
+        ORDER BY request_date DESC
+        LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
+      `;
+      return loans.rows;
+    } else {
+      // USER: Sees only their own loans
+      const loans = await sql`
+        SELECT * FROM loan_applications
+        WHERE 
+          LOWER(email) = ${userEmail?.toLowerCase()} AND
+          (first_name ILIKE ${`%${query}%`} OR 
+           surname ILIKE ${`%${query}%`})
+        ORDER BY request_date DESC
+        LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
+      `;
+      return loans.rows;
+    }
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch loans.');
+  }
+}
+
 export async function updateLoanPayment(id: string, newPayment: number) {
   try {
     await sql`
@@ -359,7 +470,6 @@ export async function fetchGuarantors(query: string = '') {
       FROM loan_guarantors g
       JOIN loan_applications l ON g.loan_id = l.id
       WHERE 
-        -- THIS IS THE FILTER:
         (g.status IS NULL OR g.status != 'verified') 
         AND (g.guarantor_name ILIKE ${'%' + query + '%'} OR l.first_name ILIKE ${'%' + query + '%'}) 
       ORDER BY g.created_at DESC
@@ -401,11 +511,52 @@ export async function getTodaysLoans() {
   } catch (error) { return []; }
 }
 
+export async function fetchAllInvestments() {
+  try {
+    const data = await sql`
+      SELECT 
+        investments.*, 
+        users.first_name, 
+        users.surname 
+      FROM investments
+      JOIN users ON investments.member_email = users.email
+      ORDER BY investments.created_at DESC
+    `;
+    return data.rows;
+  } catch (error) {
+    console.error('Database Error:', error);
+    return [];
+  }
+}
+
+
 export async function fetchInvestments() {
-  const data = await sql`
-    SELECT i.*, m.first_name, m.surname FROM investments i 
-    JOIN memberships m ON i.member_id = m.id ORDER BY i.created_at DESC`;
-  return data.rows;
+  const user = await getSessionInfo();
+  if (!user) return [];
+
+  try {
+    if (user.isAdmin) {
+      // ADMIN: See all investments from all members
+      const data = await sql`
+        SELECT i.*, m.first_name, m.surname 
+        FROM investments i 
+        JOIN memberships m ON i.member_id = m.id 
+        ORDER BY i.created_at DESC`;
+      return data.rows;
+    } else {
+      // INVESTOR: Only see investments linked to their own email
+      const data = await sql`
+        SELECT i.*, m.first_name, m.surname 
+        FROM investments i 
+        JOIN memberships m ON i.member_id = m.id 
+        WHERE LOWER(i.member_email) = ${user.email}
+        ORDER BY i.created_at DESC`;
+      return data.rows;
+    }
+  } catch (error) {
+    console.error('Fetch Error:', error);
+    return [];
+  }
 }
 
 export async function approveInvestment(investmentId: string) {
@@ -421,5 +572,222 @@ export async function authenticate(prevState: string | undefined, formData: Form
       return error.type === 'CredentialsSignin' ? 'Invalid credentials.' : 'Something went wrong.';
     }
     throw error;
+  }
+}
+/**
+ * ACTION: Request Investment Withdrawal
+ */
+export async function requestWithdrawal(formData: FormData): Promise<{ success: boolean; message: string }> {
+  try {
+    // 1. Get the verified session from NextAuth
+    const session = await auth();
+    const sessionEmail = session?.user?.email?.toLowerCase();
+
+    if (!sessionEmail) {
+      return { success: false, message: 'You must be logged in to perform this action.' };
+    }
+
+    const investmentId = formData.get('investmentId') as string;
+    const amountToWithdraw = parseFloat(formData.get('amount') as string) || 0;
+
+    // 2. Verify Member exists using the SESSION email
+    const memberResult = await sql`
+      SELECT id FROM memberships 
+      WHERE LOWER(email) = ${sessionEmail} 
+      LIMIT 1
+    `;
+    
+    if (memberResult.rows.length === 0) {
+      return { success: false, message: 'Your member profile was not found.' };
+    }
+    const memberId = memberResult.rows[0].id;
+
+    // 3. Verify Investment exists, belongs to THIS member, and is active
+    const invResult = await sql`
+      SELECT amount, status FROM investments 
+      WHERE id = ${investmentId} 
+      AND member_id = ${memberId} 
+      LIMIT 1
+    `;
+
+    if (invResult.rows.length === 0) {
+      return { success: false, message: 'Investment record not found or access denied.' };
+    }
+
+    const investment = invResult.rows[0];
+    
+    if (investment.status !== 'active') {
+      return { success: false, message: 'Withdrawals are only allowed for active investments.' };
+    }
+
+    if (amountToWithdraw > investment.amount) {
+      return { success: false, message: 'Insufficient balance. You cannot withdraw more than your current investment.' };
+    }
+
+    // 4. Record the withdrawal request
+    await sql`
+      INSERT INTO investment_withdrawals (
+        member_id, 
+        investment_id, 
+        amount, 
+        bank_name, 
+        account_number, 
+        account_name, 
+        status
+      )
+      VALUES (
+        ${memberId},
+        ${investmentId},
+        ${amountToWithdraw},
+        ${formData.get('bankName') as string},
+        ${formData.get('accountNumber') as string},
+        ${formData.get('accountName') as string},
+        'pending'
+      )
+    `;
+
+    // Revalidate paths so the UI updates immediately
+    revalidatePath('/dashboard/investments');
+    revalidatePath('/dashboard/withdrawals'); // If you have an admin view
+    
+    return { success: true, message: 'Withdrawal request submitted successfully for approval!' };
+
+  } catch (error: any) {
+    console.error('Withdrawal Error:', error);
+    return { success: false, message: 'A system error occurred. Please try again later.' };
+  }
+}
+/**
+ * ACTION: Admin Approve Withdrawal
+ */
+export async function approveWithdrawal(withdrawalId: string) {
+  try {
+    // 1. Get withdrawal details
+    const result = await sql`SELECT * FROM investment_withdrawals WHERE id = ${withdrawalId} LIMIT 1`;
+    if (result.rows.length === 0) return { success: false, message: 'Not found' };
+    
+    const withdrawal = result.rows[0];
+
+    // 2. Deduct from the main investment
+    await sql`
+      UPDATE investments 
+      SET amount = amount - ${withdrawal.amount}
+      WHERE id = ${withdrawal.investment_id}
+    `;
+
+    // 3. Mark withdrawal as paid
+    await sql`UPDATE investment_withdrawals SET status = 'paid' WHERE id = ${withdrawalId}`;
+
+    revalidatePath('/dashboard/withdrawals');
+    return { success: true, message: 'Withdrawal approved and balance updated.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+/**
+ * ACTION: Fetch Loan Pages (Pagination Count)
+ */
+export async function fetchLoansPages(
+  query: string, 
+  userEmail?: string, 
+  userRole?: string
+) {
+  try {
+    let count;
+    
+    if (userRole === 'admin') {
+      // ADMIN: Count all matching applications
+      count = await sql`
+        SELECT COUNT(*)
+        FROM loan_applications
+        WHERE
+          first_name ILIKE ${`%${query}%`} OR
+          surname ILIKE ${`%${query}%`} OR
+          email ILIKE ${`%${query}%`}
+      `;
+    } else {
+      // INVESTOR: Count only their own matching applications
+      count = await sql`
+        SELECT COUNT(*)
+        FROM loan_applications
+        WHERE 
+          LOWER(email) = ${userEmail?.toLowerCase()} AND
+          (first_name ILIKE ${`%${query}%`} OR 
+           surname ILIKE ${`%${query}%`})
+      `;
+    }
+
+    const totalPages = Math.ceil(Number(count.rows[0].count) / ITEMS_PER_PAGE);
+    return totalPages;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch total number of loan pages.');
+  }
+}
+
+
+export async function createLoginAfterApproval(email: string, firstName: string) {
+  try {
+    // 1. Generate a random temporary password
+    const tempPassword = Math.random().toString(36).slice(-8); // e.g., "a1b2c3d4"
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // 2. Insert into the 'users' table (Credential Table)
+    await sql`
+      INSERT INTO users (name, email, password)
+      VALUES (${firstName}, ${email.toLowerCase()}, ${hashedPassword})
+      ON CONFLICT (email) DO NOTHING
+    `;
+
+    // 3. Send the Credentials via Resend
+    try {
+      await resend.emails.send({
+        from: 'SHHMCSOC Support <noreply@shhmcsoc.me>',
+        to: [email.toLowerCase()],
+        subject: 'Your Account Credentials - SHHMCSOC',
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2>Welcome to the Portal, ${firstName}!</h2>
+            <p>Your membership has been approved, and your login account is now active.</p>
+            <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Login Email:</strong> ${email.toLowerCase()}</p>
+              <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <code style="background: #fff; padding: 2px 5px; border: 1px solid #ddd;">${tempPassword}</code></p>
+            </div>
+            <p>For security, please change your password immediately after logging in.</p>
+            <a href="https://shhmcsoc.me/login" style="display: inline-block; padding: 10px 20px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 5px;">Login to Dashboard</a>
+            <p style="margin-top: 25px; font-size: 12px; color: #888;">If you did not request this account, please ignore this email.</p>
+          </div>
+        `,
+      });
+      console.log(`Success: Login email sent to ${email}`);
+    } catch (emailError) {
+      // We log the error but don't stop the process, as the user WAS created in DB
+      console.error('Failed to send login email:', emailError);
+    }
+
+    return { success: true, message: 'User account created and email sent.' };
+  } catch (error: any) {
+    console.error('Failed to create login:', error);
+    return { success: false, message: 'Database Error: ' + error.message };
+  }
+}
+
+export async function approveMembership(id: string, email: string, firstName: string) {
+  try {
+    // Update membership status
+    await sql`UPDATE memberships SET status = 'active' WHERE id = ${id}`;
+
+    // Trigger login creation
+    const loginResult = await createLoginAfterApproval(email, firstName);
+
+    if (loginResult.success) {
+      // Send an email saying: "Your account is ready! Use password: ${loginResult.tempPassword}"
+      // ... (Use your Resend logic here)
+    }
+
+    revalidatePath('/dashboard/memberships');
+    return { success: true };
+  } catch (error) {
+    return { success: false };
   }
 }

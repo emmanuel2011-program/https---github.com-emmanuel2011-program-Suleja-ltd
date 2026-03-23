@@ -58,12 +58,15 @@ const Spinner = () => (
 );
 
 type FormState = {
+  yourTitle: string;
   firstName: string;
   surname: string;
   middleName: string;
+  stateOfOrigin: string;
+  lga: string;
   gender: string;
   nationality: string;
-  residentialAddress: string;
+  fullResidentialAddress: string;
   occupation: string;
   email: string;
   mobilePhone: string;
@@ -94,12 +97,15 @@ type FormState = {
 };
 
 const initialFormState: FormState = {
+  yourTitle: '',
   firstName: '',
   surname: '',
   middleName: '',
+  stateOfOrigin: '',
+  lga:'',
   gender: '',
   nationality: 'Nigerian',
-  residentialAddress: '',
+  fullResidentialAddress: '',
   occupation: '',
   email: '',
   dateOfBirth: '',
@@ -152,7 +158,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       if (form.tin.length < 11 || form.tin.length < 13) {
       return "TIN must be between 11 and 13 digits.";
       }
-      if (!form.residentialAddress.trim()) return "Residential address is required.";
+      if (!form.fullResidentialAddress.trim()) return "Residential address is required.";
       if (!form.dateOfBirth) return "Date of Birth is required.";
     }
     if (step === 2) {
@@ -198,35 +204,39 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       const formData = new FormData();
 
       // Append core fields
-      formData.append('firstName', form.firstName);
+      formData.append('your_title', form.firstName);
+      formData.append('first_name', form.firstName);
       formData.append('surname', form.surname);
+      formData.append('middle_name', form.middleName);
+      formData.append('state_of_origin', form.stateOfOrigin);
+      formData.append('lga', form.lga);
       formData.append('email', form.email);
-      formData.append('mobilePhone', form.mobilePhone);
-      formData.append('dateOfBirth', form.dateOfBirth); 
-      formData.append('loanAmount', form.loanAmount);
-      formData.append('requestedDate', form.requestedDate);
-      formData.append('purposeOfLoan', form.purposeOfLoan);
-      formData.append('residentialAddress', form.residentialAddress);
-      formData.append('gender', form.gender);
+      formData.append('mobile_phone', form.mobilePhone);
+      formData.append('date_of_birth', form.dateOfBirth); 
+      formData.append('loan_amount', form.loanAmount);
+      formData.append('requested_date', form.requestedDate);
+      formData.append('purpose_of_loan', form.purposeOfLoan);
+      formData.append('full_residential_address', form.fullResidentialAddress);
       formData.append('occupation', form.occupation);
+      formData.append('gender', form.gender);
       formData.append('tin', form.tin.trim() || '');
-      formData.append('bankName', form.bankName);
-      formData.append('accountNumber', form.accountNumber);
-      formData.append('accountName', form.accountName);
-      formData.append('accountType', form.accountType);
+      formData.append('bank_name', form.bankName);
+      formData.append('account_number', form.accountNumber);
+      formData.append('account_name', form.accountName);
+      formData.append('account_type', form.accountType);
       formData.append('interest', form.interest);
       formData.append('duration', form.duration);
 
       // Spouse / Next of Kin
-      formData.append('spouseName', form.spouseName);
-      formData.append('spouseMobilePhone', form.spouseMobilePhone);
-      formData.append('spouseDOB', form.spouseDOB);
-      formData.append('spouseGender', form.spouseGender);
-      formData.append('spouseResidentialAddress', form.spouseResidentialAddress);
-      formData.append('spouseTitle', form.spouseTitle);
-      formData.append('spouseNationality', form.spouseNationality);
-      formData.append('spouseState', form.spouseStateOfOrigin);
-      formData.append('spouseLGA', form.spouseLGA);
+      formData.append('spouse_name', form.spouseName);
+      formData.append('spouse_mobile_phone', form.spouseMobilePhone);
+      formData.append('spouse_dob', form.spouseDOB);
+      formData.append('spouse_gender', form.spouseGender);
+      formData.append('spouse_residential_address', form.spouseResidentialAddress);
+      formData.append('spouse_title', form.spouseTitle);
+      formData.append('spouse_nationality', form.spouseNationality);
+      formData.append('spouse_state', form.spouseStateOfOrigin);
+      formData.append('spouse_lga', form.spouseLGA);
 
       // Interest and Repayment Logic
       const [year, month, day] = form.requestedDate.split('-').map(Number);
@@ -276,8 +286,17 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
               <UserCircleIcon className="h-5 w-5 text-green-600" /> Personal Information
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <select value={form.yourTitle} onChange={e => update('yourTitle', e.target.value)} className="rounded-md border p-2 text-sm bg-white" required>
+                <option value="">Your Title *</option>
+                <option value="Male">Mr</option>
+                <option value="Female">Mrs</option>
+                <option value="Female">Miss</option>
+              </select>
               <input type="text" placeholder="First Name *" value={form.firstName} onChange={e => update('firstName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               <input type="text" placeholder="Surname *" value={form.surname} onChange={e => update('surname', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              <input type="text" placeholder="Middle Name " value={form.middleName} onChange={e => update('middleName', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500"/>
+              <input type="text" placeholder="State Of Origin *" value={form.stateOfOrigin} onChange={e => update('stateOfOrigin', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
+              <input type="text" placeholder="LGA *" value={form.lga} onChange={e => update('lga', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               <select value={form.gender} onChange={e => update('gender', e.target.value)} className="rounded-md border p-2 text-sm bg-white" required>
                 <option value="">Select Gender *</option>
                 <option value="Male">Male</option>
@@ -305,8 +324,9 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
                 <input type="date" value={form.dateOfBirth} onChange={e => update('dateOfBirth', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
               </div>
               <div className="md:col-span-2">
-                <textarea placeholder="Full Residential Address *" value={form.residentialAddress} onChange={e => update('residentialAddress', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" rows={2} required />
+                <textarea placeholder="Full Residential Address *" value={form.fullResidentialAddress} onChange={e => update('fullResidentialAddress', e.target.value)} className="w-full rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" rows={2} required />
               </div>
+              <input type="text" placeholder="Occupation *" value={form.occupation} onChange={e => update('occupation', e.target.value)} className="rounded-md border p-2 text-sm outline-none focus:ring-1 focus:ring-green-500" required />
             </div>
           </div>
         );

@@ -172,6 +172,15 @@ export default function MembershipForm() {
             <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Mobile Phone *</label>
             <input name="mobilePhone" type="tel" maxLength={11} required className="mt-1 w-full rounded-md border py-2 px-3 text-sm outline-none" placeholder="08012345678" />
           </div>
+
+          {/* NEW FIELD: TIN */}
+          <div>
+            <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 flex items-center gap-1">
+              <IdentificationIcon className="h-3 w-3" /> TIN (Tax ID)
+            </label>
+            <input name="tin" type="text" className="mt-1 w-full rounded-md border py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-green-500" placeholder="Optional" />
+          </div>
+
           <div>
             <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Gender *</label>
             <select name="gender" required className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none">
@@ -179,13 +188,25 @@ export default function MembershipForm() {
               <option value="Female">Female</option>
             </select>
           </div>
+
+          {/* NEW FIELD: MEMBERSHIP TYPE */}
+          <div>
+            <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 flex items-center gap-1">
+              <TagIcon className="h-3 w-3" /> Membership Type *
+            </label>
+            <select name="membershipType" required className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none focus:ring-2 focus:ring-green-500">
+              <option value="Investor">Investor</option>
+              <option value="Nominal">Nominal</option>
+              <option value="Loan Applicant">Loan Applicant</option>
+            </select>
+          </div>
+
           <div className="md:col-span-2">
             <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Residential Address *</label>
             <textarea name="residentialAddress" required rows={2} className="mt-1 w-full rounded-md border py-2 px-3 text-sm outline-none" />
           </div>
         </div>
       </div>
-
       {/* SECTION 2: DOCUMENT UPLOADS */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">

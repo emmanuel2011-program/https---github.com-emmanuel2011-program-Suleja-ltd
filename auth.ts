@@ -10,7 +10,6 @@ const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
 async function getUser(email: string): Promise<User | undefined> {
   try {
-    // 1. We use LOWER() to ensure 'Admin@...' matches 'admin@...'
     const user = await sql<User[]>`SELECT * FROM users WHERE LOWER(email) = LOWER(${email.trim()})`;
     return user[0];
   } catch (error) {
@@ -18,8 +17,6 @@ async function getUser(email: string): Promise<User | undefined> {
     throw new Error('Failed to fetch user.');
   }
 }
-
-// ... (keep imports and getUser function as they are)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -34,30 +31,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const { email, password } = parsedCredentials.data;
           const user = await getUser(email);
 
-          console.log('--- Auth Debug ---');
-          console.log('User found in DB:', !!user);
-
           if (!user) return null;
 
           const passwordsMatch = await bcrypt.compare(password, user.password);
-          console.log('Passwords match result:', passwordsMatch);
+          
           if (passwordsMatch) {
-  return user;
-}
-
-                
-
-          // SKELETON KEY: If it's your admin email, let it through even if bcrypt fails
-          // if (passwordsMatch || email.toLowerCase() === 'admin@shhmcsoc.me') {
-          //   console.log('Login successful (Admin Bypass Active)');
-          //   return user;
-          // }
-        
-        } else {
-          console.log('Zod Validation Failed:', parsedCredentials.error.errors);
+            return user; 
+          }
         }
-
-        console.log('Invalid credentials');
         return null;
       },
     }),
@@ -66,14 +47,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.email = user.email;
+        const adminEmails = ['admin@shhmcsoc.me', 'info@shhmcsoc.me'];
+        
+        // FIX: Added optional chaining (?.) and a fallback empty string (|| '')
+        token.role = adminEmails.includes(user.email?.toLowerCase() || '') 
+          ? 'admin' 
+          : 'investor';
       }
       return token;
     },
-    async session({ session, token }) {
-      if (session.user && token.email) {
-        session.user.email = (token.email as string).toLowerCase(); // Ensure lowercase
-      }
-      return session;
-    },
+    // auth.ts
+
+async session({ session, token }) {
+  if (session.user) {
+    session.user.email = (token.email as string || '').toLowerCase();
+    
+    // By casting session.user to 'any', we stop the "Property role does not exist" error
+    (session.user as any).role = token.role as string; 
+  }
+  return session;
+},
   },
 });
