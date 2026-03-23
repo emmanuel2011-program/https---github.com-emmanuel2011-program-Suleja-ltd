@@ -245,9 +245,28 @@ export async function createLoan(prevState: any, formData: FormData) {
       let member_id = existingMember.rows[0]?.id;
       
       if (!member_id) {
+        // This is the specific INSERT causing the "memberships" error
         const newMember = await sql`
-          INSERT INTO memberships (surname, first_name, email, mobile_phone, residential_address)
-          VALUES (${surname}, ${first_name}, ${email}, ${formData.get('mobile_phone') as string}, ${formData.get('residential_address') as string})
+          INSERT INTO memberships (
+            surname, 
+            first_name, 
+            email, 
+            mobile_phone, 
+            residential_address,
+            date_of_birth,     -- Added to satisfy NOT NULL
+            gender,            -- Added to satisfy NOT NULL
+            title              -- Added to satisfy NOT NULL
+          )
+          VALUES (
+            ${surname}, 
+            ${first_name}, 
+            ${email}, 
+            ${formData.get('mobile_phone') as string}, 
+            ${formData.get('full_residential_address') as string}, -- Using correct key
+            ${formData.get('date_of_birth') as string}, 
+            ${formData.get('gender') as string},
+            ${formData.get('your_title') as string}
+          )
           RETURNING id
         `;
         member_id = newMember.rows[0].id;
