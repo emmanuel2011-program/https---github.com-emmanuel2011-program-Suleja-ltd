@@ -204,7 +204,7 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
       const formData = new FormData();
 
       // Append core fields
-      formData.append('your_title', form.firstName);
+      formData.append('your_title', form.yourTitle);
       formData.append('first_name', form.firstName);
       formData.append('surname', form.surname);
       formData.append('middle_name', form.middleName);
