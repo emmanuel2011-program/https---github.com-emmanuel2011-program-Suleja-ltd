@@ -266,7 +266,7 @@ export async function createLoan(prevState: any, formData: FormData) {
             ${formData.get('full_residential_address') as string}, -- Using correct key
             ${formData.get('date_of_birth') as string}, 
             ${formData.get('gender') as string},
-            ${formData.get('your_title') as string}
+            ${formData.get('your_title') as string},
             ${formData.get('nationality') as string || 'Nigerian'}
           )
           RETURNING id
