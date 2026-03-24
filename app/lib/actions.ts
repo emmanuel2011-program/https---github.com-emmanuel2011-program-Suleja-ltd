@@ -255,8 +255,8 @@ export async function createLoan(prevState: any, formData: FormData) {
             residential_address,
             date_of_birth,     -- Added to satisfy NOT NULL
             gender,            -- Added to satisfy NOT NULL
-            title              -- Added to satisfy NOT NULL
-            nationality,        -- Added to satisfy NOT NULL
+            title,              -- Added to satisfy NOT NULL
+            nationality        -- Added to satisfy NOT NULL
           )
           VALUES (
             ${surname}, 
