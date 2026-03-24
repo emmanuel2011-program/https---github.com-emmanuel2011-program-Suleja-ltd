@@ -256,6 +256,7 @@ export async function createLoan(prevState: any, formData: FormData) {
             date_of_birth,     -- Added to satisfy NOT NULL
             gender,            -- Added to satisfy NOT NULL
             title              -- Added to satisfy NOT NULL
+            nationality,        -- Added to satisfy NOT NULL
           )
           VALUES (
             ${surname}, 
@@ -266,6 +267,7 @@ export async function createLoan(prevState: any, formData: FormData) {
             ${formData.get('date_of_birth') as string}, 
             ${formData.get('gender') as string},
             ${formData.get('your_title') as string}
+            ${formData.get('nationality') as string || 'Nigerian'}
           )
           RETURNING id
         `;
