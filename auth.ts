@@ -43,29 +43,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.email = user.email;
-        const adminEmails = ['admin@shhmcsoc.me', 'info@shhmcsoc.me'];
-        
-        // FIX: Added optional chaining (?.) and a fallback empty string (|| '')
-        token.role = adminEmails.includes(user.email?.toLowerCase() || '') 
-          ? 'admin' 
-          : 'investor';
-      }
-      return token;
-    },
-    // auth.ts
+  async jwt({ token, user }) {
+    // This 'user' object comes from your 'getUser' function in the database
+    if (user) {
+      token.email = user.email;
+      
+      // Use the role from the database if it exists, 
+      // otherwise fallback to the adminEmail list as a backup.
+      const adminEmails = ['admin@shhmcsoc.me', 'info@shhmcsoc.me'];
+      const isHardcodedAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
+      
+      // Priority: 1. Database Role, 2. Hardcoded Admin List, 3. Default 'investor'
+      token.role = (user as any).role || (isHardcodedAdmin ? 'admin' : 'investor');
+    }
+    return token;
+  },
 
-async session({ session, token }) {
-  if (session.user) {
-    session.user.email = (token.email as string || '').toLowerCase();
-    
-    // By casting session.user to 'any', we stop the "Property role does not exist" error
-    (session.user as any).role = token.role as string; 
-  }
-  return session;
-},
+  async session({ session, token }) {
+    if (session.user) {
+      session.user.email = (token.email as string || '').toLowerCase();
+      // This allows you to use session.user.role in your components
+      (session.user as any).role = token.role as string; 
+    }
+    return session;
+  },
   },
 });

@@ -56,26 +56,24 @@ async function uploadFile(file: File | null, path: string) {
 export async function registerUser(formData: FormData) {
   const firstName = formData.get('firstName') as string;
   const surname = formData.get('surname') as string;
-  const email = formData.get('email') as string;
+  const email = (formData.get('email') as string).toLowerCase();
   const password = formData.get('password') as string;
-  const role = formData.get('role') as string; // Get the selected role
+  const role = formData.get('role') as string; // This gets 'investor' or 'admin' from your select
 
-  // 1. Hash the password
   const hashedPassword = await bcrypt.hash(password, 10);
 
   try {
-    // 2. Insert with the chosen role
     await sql`
-      INSERT INTO users (first_name, surname, email, password, role)
-      VALUES (${firstName}, ${surname}, ${email}, ${hashedPassword}, ${role})
+      INSERT INTO users (name, email, password, role)
+      VALUES (${firstName + ' ' + surname}, ${email}, ${hashedPassword}, ${role})
     `;
-  } catch (error) {
-    console.error('Database Error:', error);
-    return { message: 'Failed to create account. This email may already be in use.' };
+    
+    // After registration, send them to login
+    return { success: true }; 
+  } catch (error: any) {
+    console.error('Registration Error:', error);
+    return { message: 'Database error: Failed to create account.' };
   }
-
-  // 3. Redirect to login
-  redirect('/login');
 }
 /**
  * ACTION: Create Investment
