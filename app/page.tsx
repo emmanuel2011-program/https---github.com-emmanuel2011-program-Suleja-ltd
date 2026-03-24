@@ -44,7 +44,7 @@ export default function Page() {
         {/* Left Side: Cooperative Info */}
         <div className="flex flex-col gap-6 md:w-1/2 max-w-2xl">
           <div className="inline-block px-4 py-1.5 bg-green-100 text-green-700 rounded-full text-xs font-black uppercase tracking-widest">
-            Empowering Others Since 2026
+            Empowering Others Since 2016
           </div>
           <h1 className="text-4xl md:text-6xl font-black text-gray-900 leading-[1.1]">
             Working Together <br />

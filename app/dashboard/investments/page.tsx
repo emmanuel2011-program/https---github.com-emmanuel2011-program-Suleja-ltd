@@ -1,28 +1,24 @@
 import { fetchInvestments } from '@/app/lib/actions';
-import { BanknotesIcon } from '@heroicons/react/24/outline';
+import { BanknotesIcon, WifiIcon } from '@heroicons/react/24/outline';
 import InvestmentTable from '@/app/ui/investments/investment-table';
 
-// 1. Must be 'export default'
-// 2. Must be 'async' since it's a Server Component fetching data
 export default async function Page() {
-  // Fetch data safely
-  const investments = await fetchInvestments();
+  // 1. Define it here with 'let' and a Type so the whole function can see it
+  let safeInvestments: any[] = []; 
+  let connectionError = false;
 
-  // Handle null/undefined data to prevent the .map error
-  const safeInvestments = investments || [];
+  try {
+    const investments = await fetchInvestments();
+    // 2. Assign the value here (No 'const' here!)
+    safeInvestments = investments || [];
+  } catch (error) {
+    console.error('Database connection timed out:', error);
+    connectionError = true;
+  }
 
   return (
-    <div className="w-full p-4 md:p-6 bg-gray-50/50 min-h-screen">
-      <div className="flex w-full items-center justify-between mb-8">
-        <h1 className="text-xl md:text-2xl font-black text-blue-900 flex items-center gap-2">
-          <BanknotesIcon className="h-8 w-8 text-blue-600" />
-          Investment Manager
-        </h1>
-      </div>
-
-      {/* This is the Client Component we created in the last step.
-         Make sure the file path below matches where you saved it!
-      */}
+    <div>
+      {/* 3. Now this component can see it without squiggles! */}
       <InvestmentTable initialInvestments={safeInvestments} />
     </div>
   );
