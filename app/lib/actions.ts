@@ -343,10 +343,10 @@ export async function createLoan(prevState: any, formData: FormData) {
         )
       `;
 
-      try {
-        const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName: first_name, loanAmount: loan_amount.toLocaleString('en-NG'), duration: formData.get('duration') as string }));
-        await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
-      } catch (e) { console.error("App email fail:", e); }
+      // try {
+      //   const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName: first_name, loanAmount: loan_amount.toLocaleString('en-NG'), duration: formData.get('duration') as string }));
+      //   await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
+      // } catch (e) { console.error("App email fail:", e); }
     }
 
     revalidatePath('/dashboard/loans');
@@ -374,17 +374,17 @@ export async function updateLoanStatus(loanId: string, status: 'active' | 'rejec
       const calculatedInterestAmount = principal * interestRate; 
       const totalRepayment = principal + calculatedInterestAmount;
 
-      try {
-        const emailHtml = await render(React.createElement(LoanStatusEmail, {
-          firstName: loan.first_name,
-          status: status,
-          amount: principal,
-          interestAmount: calculatedInterestAmount, 
-          totalRepayment: totalRepayment,
-          repaymentDate: loan.repayment_date ? new Date(loan.repayment_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'
-        }));
-        await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [loan.email], subject: `Loan Application ${status.toUpperCase()} - SHHMCSOC`, html: emailHtml });
-      } catch (e) { console.error("Status email fail:", e); }
+      // try {
+      //   const emailHtml = await render(React.createElement(LoanStatusEmail, {
+      //     firstName: loan.first_name,
+      //     status: status,
+      //     amount: principal,
+      //     interestAmount: calculatedInterestAmount, 
+      //     totalRepayment: totalRepayment,
+      //     repaymentDate: loan.repayment_date ? new Date(loan.repayment_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'
+      //   }));
+      //   await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [loan.email], subject: `Loan Application ${status.toUpperCase()} - SHHMCSOC`, html: emailHtml });
+      // } catch (e) { console.error("Status email fail:", e); }
     }
 
     revalidatePath('/dashboard/loans');
