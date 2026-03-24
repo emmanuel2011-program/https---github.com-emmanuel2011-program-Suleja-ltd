@@ -16,7 +16,7 @@ import { WelcomeMembershipEmail } from '@/app/ui/emails/welcome-membership';
 import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation'; 
 import { LoanStatusEmail } from '@/app/ui/emails/loan-status';
 import { GuarantorConfirmationEmail } from '@/app/ui/emails/guarantor-confirmation';
-
+import { InvestmentConfirmationEmail } from '@/app/ui/emails/investment-confirmation';
 
 // Helper to get the current user and determine if they are an admin
 async function getSessionInfo() {
@@ -100,6 +100,7 @@ export async function createInvestment(formData: FormData): Promise<{ success: b
 
     const months = getMonthsFromDuration(duration);
     const totalInterest = amountToInvest * 0.07 * months;
+    
 
     await sql`
       INSERT INTO investments (
@@ -118,6 +119,25 @@ export async function createInvestment(formData: FormData): Promise<{ success: b
         ${accountClass}
       )
     `;
+    try {
+      const emailHtml = await render(
+        React.createElement(InvestmentConfirmationEmail, {
+          amount: amountToInvest,
+          duration: duration,
+          interest: amountToInvest * 0.07 * (parseInt(duration) || 1)
+        })
+      );
+
+      await resend.emails.send({
+        from: 'SulejaHH MCoop <noreply@shhmcsoc.me>',
+        to: [email.toLowerCase()],
+        subject: 'Investment Registration Received - SulejaHH',
+        html: emailHtml,
+      });
+    } catch (emailError) {
+      console.error('Failed to send investment email:', emailError);
+      // We don't return false here because the DB record was already created
+    }
 
     revalidatePath('/dashboard/investments');
     return { success: true, message: 'Investment successfully recorded!' };
@@ -585,6 +605,8 @@ export async function approveInvestment(investmentId: string) {
   revalidatePath('/dashboard/investments');
   return { success: true };
 }
+
+
 
 export async function authenticate(prevState: string | undefined, formData: FormData) {
   try { await signIn('credentials', formData); } 
