@@ -16,27 +16,32 @@ import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 
 const links = [
-  // Changed Home to 'admin' so Investors land straight on Membership/Investments
   { name: 'Home', href: '/dashboard', icon: HomeIcon, role: 'admin' },
   { name: 'Membership', href: '/dashboard/membership', icon: IdentificationIcon, role: 'both' },
-  { name: 'My Investments', href: '/dashboard/investments', icon: BanknotesIcon, role: 'both' },
-  
-  // Changed Active Portfolio to 'admin' (assuming this is the loan management side)
+  { 
+    name: 'My Investments', 
+    href: '/dashboard/investments', 
+    icon: BanknotesIcon, 
+    role: 'both',
+    showBadge: true // We'll use this to know where to put the number
+  },
   { name: 'Active Portfolio', href: '/dashboard/active-loans', icon: BriefcaseIcon, role: 'admin' },
-  
-  // Admin Only Links
   { name: 'Manage Customers', href: '/dashboard/customer', icon: UsersIcon, role: 'admin' },
   { name: 'All Guarantors', href: '/dashboard/guarantors', icon: UserGroupIcon, role: 'admin' },
   { name: 'Admin Panel', href: '/dashboard/admin', icon: ShieldCheckIcon, role: 'admin' },
-
   { name: 'Contacts', href: '/dashboard/contacts', icon: PhoneIcon, role: 'both' },
   { name: 'About', href: '/dashboard/about', icon: InformationCircleIcon, role: 'both' },
 ];
 
-export default function NavLinks({ role }: { role: string }) { // Change { user: any } to { role: string }
+// 1. Updated the props interface to include pendingCount
+export default function NavLinks({ 
+  role, 
+  pendingCount = 0 
+}: { 
+  role: string, 
+  pendingCount?: number 
+}) {
   const pathname = usePathname();
-  
-  // You no longer need to calculate userRole here because SideNav did it for you!
   const userRole = role; 
 
   return (
@@ -59,7 +64,14 @@ export default function NavLinks({ role }: { role: string }) { // Change { user:
             )}
           >
             <LinkIcon className="w-6" />
-            <p className="block">{link.name}</p>
+            <p className="block flex-1">{link.name}</p>
+
+            {/* 2. Added the Red Badge logic here */}
+            {link.showBadge && userRole === 'admin' && pendingCount > 0 && (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white animate-pulse shadow-sm">
+                {pendingCount}
+              </span>
+            )}
           </Link>
         );
       })}

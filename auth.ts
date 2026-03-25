@@ -18,6 +18,8 @@ async function getUser(email: string): Promise<User | undefined> {
   }
 }
 
+// ... existing imports (NextAuth, Credentials, etc.)
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
@@ -45,29 +47,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   
   callbacks: {
-  async jwt({ token, user }) {
-    // This 'user' object comes from your 'getUser' function in the database
-    if (user) {
-      token.email = user.email;
-      
-      // Use the role from the database if it exists, 
-      // otherwise fallback to the adminEmail list as a backup.
-      const adminEmails = ['admin@shhmcsoc.me', 'info@shhmcsoc.me'];
-      const isHardcodedAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
-      
-      // Priority: 1. Database Role, 2. Hardcoded Admin List, 3. Default 'investor'
-      token.role = (user as any).role || (isHardcodedAdmin ? 'admin' : 'investor');
-    }
-    return token;
-  },
+    async jwt({ token, user }) {
+      if (user) {
+        const adminEmails = ['admin@shhmcsoc.me', 'info@shhmcsoc.me'];
+        const userEmail = user.email?.toLowerCase() || '';
+        const isHardcodedAdmin = adminEmails.includes(userEmail);
 
-  async session({ session, token }) {
-    if (session.user) {
-      session.user.email = (token.email as string || '').toLowerCase();
-      // This allows you to use session.user.role in your components
-      (session.user as any).role = token.role as string; 
-    }
-    return session;
-  },
+        // THE FIX: 
+        // 1. Check the database role first.
+        // 2. If it's one of the hardcoded emails, force the role to 'user' (your admin role).
+        // 3. Otherwise, default to 'investor'.
+        token.role = (user as any).role || (isHardcodedAdmin ? 'user' : 'investor');
+        token.email = userEmail;
+      }
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user) {
+        // Pass the corrected 'user' or 'investor' role to the session
+        (session.user as any).role = token.role;
+        session.user.email = token.email as string;
+      }
+      return session;
+    },
   },
 });

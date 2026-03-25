@@ -569,27 +569,51 @@ export async function fetchAllInvestments() {
 }
 
 
-export async function fetchInvestments() {
+
+export async function fetchInvestments(query: string = '') {
   const user = await getSessionInfo();
-  if (!user) return [];
+  if (!user) {
+    console.log("DEBUG: No session found");
+    return [];
+  }
+
+  // Normalize inputs to prevent "oko" vs "okoyee" style mismatches
+  const userEmail = user.email.trim().toLowerCase();
+  const searchPattern = `%${query.trim().toLowerCase()}%`;
+
+  console.log("DEBUG: Logged in as:", userEmail, "Is Admin:", user.isAdmin);
 
   try {
     if (user.isAdmin) {
-      // ADMIN: See all investments from all members
+      // ADMIN: Can search across everything
       const data = await sql`
         SELECT i.*, m.first_name, m.surname 
         FROM investments i 
-        JOIN memberships m ON i.member_id = m.id 
+        LEFT JOIN memberships m ON i.member_id = m.id 
+        WHERE 
+          m.first_name ILIKE ${searchPattern} OR 
+          m.surname ILIKE ${searchPattern} OR 
+          i.member_email ILIKE ${searchPattern} OR
+          i.status ILIKE ${searchPattern}
         ORDER BY i.created_at DESC`;
       return data.rows;
     } else {
-      // INVESTOR: Only see investments linked to their own email
+      // INVESTOR: Use LEFT JOIN so records appear even if membership profile is missing
+      console.log("DEBUG: Running Investor SQL for:", userEmail);
+      
       const data = await sql`
         SELECT i.*, m.first_name, m.surname 
         FROM investments i 
-        JOIN memberships m ON i.member_id = m.id 
-        WHERE LOWER(i.member_email) = ${user.email}
+        LEFT JOIN memberships m ON i.member_id = m.id 
+        WHERE LOWER(TRIM(i.member_email)) = ${userEmail}
+        AND (
+          i.status ILIKE ${searchPattern} OR
+          i.id::text ILIKE ${searchPattern} OR
+          m.first_name ILIKE ${searchPattern}
+        )
         ORDER BY i.created_at DESC`;
+      
+      console.log("DEBUG: Rows found for investor:", data.rows.length);
       return data.rows;
     }
   } catch (error) {
@@ -604,7 +628,14 @@ export async function approveInvestment(investmentId: string) {
   return { success: true };
 }
 
-
+export async function getPendingWithdrawalCount(): Promise<number> {
+  try {
+    const data = await sql`SELECT COUNT(*) FROM investment_withdrawals WHERE status = 'pending'`;
+    return Number(data.rows[0].count) || 0;
+  } catch (error) {
+    return 0;
+  }
+}
 
 export async function authenticate(prevState: string | undefined, formData: FormData) {
   try { await signIn('credentials', formData); } 
