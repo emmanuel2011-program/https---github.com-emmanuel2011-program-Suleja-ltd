@@ -16,24 +16,24 @@ import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 
 const links = [
-  { name: 'Home', href: '/dashboard', icon: HomeIcon, role: 'admin' },
+  // CHANGED 'admin' to 'user' across all administrative links
+  { name: 'Home', href: '/dashboard', icon: HomeIcon, role: 'user' }, 
   { name: 'Membership', href: '/dashboard/membership', icon: IdentificationIcon, role: 'both' },
   { 
     name: 'My Investments', 
     href: '/dashboard/investments', 
     icon: BanknotesIcon, 
     role: 'both',
-    showBadge: true // We'll use this to know where to put the number
+    showBadge: true 
   },
-  { name: 'Active Portfolio', href: '/dashboard/active-loans', icon: BriefcaseIcon, role: 'admin' },
-  { name: 'Manage Customers', href: '/dashboard/customer', icon: UsersIcon, role: 'admin' },
-  { name: 'All Guarantors', href: '/dashboard/guarantors', icon: UserGroupIcon, role: 'admin' },
-  { name: 'Admin Panel', href: '/dashboard/admin', icon: ShieldCheckIcon, role: 'admin' },
+  { name: 'Active Portfolio', href: '/dashboard/active-loans', icon: BriefcaseIcon, role: 'user' },
+  { name: 'Manage Customers', href: '/dashboard/customer', icon: UsersIcon, role: 'user' },
+  { name: 'All Guarantors', href: '/dashboard/guarantors', icon: UserGroupIcon, role: 'user' },
+  { name: 'Admin Panel', href: '/dashboard/admin', icon: ShieldCheckIcon, role: 'user' },
   { name: 'Contacts', href: '/dashboard/contacts', icon: PhoneIcon, role: 'both' },
   { name: 'About', href: '/dashboard/about', icon: InformationCircleIcon, role: 'both' },
 ];
 
-// 1. Updated the props interface to include pendingCount
 export default function NavLinks({ 
   role, 
   pendingCount = 0 
@@ -42,11 +42,13 @@ export default function NavLinks({
   pendingCount?: number 
 }) {
   const pathname = usePathname();
-  const userRole = role; 
+  // Ensure we are working with lowercase for safety
+  const userRole = role?.toLowerCase(); 
 
   return (
     <div className="flex flex-col space-y-2">
       {links.map((link) => {
+        // Now 'user' (from session) will match 'user' (in links array)
         const canSee = link.role === 'both' || link.role === userRole;
         if (!canSee) return null;
 
@@ -66,8 +68,8 @@ export default function NavLinks({
             <LinkIcon className="w-6" />
             <p className="block flex-1">{link.name}</p>
 
-            {/* 2. Added the Red Badge logic here */}
-            {link.showBadge && userRole === 'admin' && pendingCount > 0 && (
+            {/* Updated badge logic to check for 'user' role */}
+            {link.showBadge && userRole === 'user' && pendingCount > 0 && (
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white animate-pulse shadow-sm">
                 {pendingCount}
               </span>
