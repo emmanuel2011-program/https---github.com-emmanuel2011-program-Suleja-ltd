@@ -287,19 +287,30 @@ export default function MembershipForm() {
             <h2 className={`text-lg font-semibold flex items-center gap-2 ${wantsToInvest ? 'text-blue-800' : 'text-gray-400'}`}>
               <BanknotesIcon className="h-5 w-5" />
               Investment Plan
-            </h2>
-            <button 
-              type="button"
-              onClick={() => setWantsToInvest(!wantsToInvest)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${
-                wantsToInvest ? 'bg-blue-600 text-white shadow-md' : 'bg-white border border-gray-300 text-gray-500'
-              }`}
-            >
-              {wantsToInvest ? <CheckCircleIcon className="h-4 w-4" /> : <PlusCircleIcon className="h-4 w-4" />}
-              {wantsToInvest ? 'Enabled' : 'Add Investment'}
-            </button>
-          </div>
-
+      </h2>
+      <button 
+        type="button"
+        onClick={() => setWantsToInvest(!wantsToInvest)}
+        className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+        wantsToInvest 
+          ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-300 scale-105' 
+           : 'bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 shadow-sm'
+        }`}
+>
+        {wantsToInvest ? (
+          <>
+             <CheckCircleIcon className="h-5 w-5" />
+             <span>Investment Enabled</span>
+          </>
+        ) : (
+          <>
+            <PlusCircleIcon className="h-5 w-5" />
+            <span>Add Investment</span>
+          </>
+    )}
+      </button>
+      
+    </div>
           <div className={`space-y-4 transition-all ${wantsToInvest ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
             <div>
               <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 mb-2 block">Select ROI Plan *</label>

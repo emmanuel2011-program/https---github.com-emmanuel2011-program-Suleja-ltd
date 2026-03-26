@@ -78,33 +78,30 @@ export async function registerUser(formData: FormData) {
 /**
  * ACTION: Create Investment
  */
-/**
- * ACTION: Create Investment
- */
-export async function createInvestment(formData: FormData): Promise<{ success: boolean; message: string }> {
+
+export async function createInvestment(formData: FormData): Promise<ActionResponse> {
   try {
-    // 1. Extract and sanitize all fields from formData
+    // 1. Extract and sanitize
     const email = (formData.get('email') as string)?.toLowerCase().trim();
     const amountToInvest = parseFloat(formData.get('amountToInvest') as string) || 0;
     const duration = (formData.get('investmentDuration') as string) || '1 Month';
     const accountClass = (formData.get('accountClass') as string) || 'Investment';
     const selectedRoi = parseFloat(formData.get('selectedRoi') as string) || 7;
     
-    // Bank Details
     const bankName = formData.get('bankName') as string;
     const accountNumber = formData.get('accountNumber') as string;
-    const accountName = formData.get('accountName') as string; // Payout name
+    const accountName = formData.get('accountName') as string; 
     const signatureName = formData.get('signatureName') as string;
 
-    // 2. Validate Member Existence
+    // 2. Validate Member
     const memberResult = await sql`SELECT id FROM memberships WHERE LOWER(email) = ${email} LIMIT 1`;
     
     if (memberResult.rows.length === 0) {
-      return { success: false, message: 'No member account found with this email. Please register as a member first.' };
+      return { success: false, message: 'No member account found with this email. Please register first.' };
     }
     const memberId = memberResult.rows[0].id;
 
-    // 3. Handle File Upload
+    // 3. Handle File
     const receiptFile = formData.get('paymentReceipt') as File;
     if (!receiptFile || receiptFile.size === 0) {
        return { success: false, message: 'Payment receipt image/PDF is required.' };
@@ -112,63 +109,48 @@ export async function createInvestment(formData: FormData): Promise<{ success: b
     
     const receiptUrl = await uploadFile(receiptFile, 'receipts');
     if (!receiptUrl) {
-      return { success: false, message: 'Failed to upload receipt. Please try again.' };
+      return { success: false, message: 'Failed to upload receipt.' };
     }
 
     // 4. Calculate Interest
     const months = getMonthsFromDuration(duration);
     const totalInterest = Math.round(amountToInvest * (selectedRoi / 100) * months);
 
-    // --- 5. THE FIX: UPDATE BOTH TABLES ---
-    
-    // First: Update member's bank info in 'memberships' so it's current
-    // We use 'payout_account_name' to match your schema error from earlier
-    await sql`
-      UPDATE memberships 
-      SET 
-        bank_name = ${bankName},
-        account_number = ${accountNumber},
-        payout_account_name = ${accountName}
-      WHERE id = ${memberId}
-    `;
+    // 5. Transaction
+    await sql`BEGIN`;
 
-    // Second: Insert the actual record into 'investments'
-    await sql`
-      INSERT INTO investments (
-        member_id, 
-        member_email, 
-        amount, 
-        monthly_interest, 
-        bank_name, 
-        account_number, 
-        account_name, 
-        receipt_url, 
-        status,
-        contract_accepted, 
-        duration, 
-        account_class,
-        selected_roi,
-        signature_name
-      )
-      VALUES (
-        ${memberId}, 
-        ${email}, 
-        ${amountToInvest}, 
-        ${totalInterest}, 
-        ${bankName}, 
-        ${accountNumber},
-        ${accountName},
-        ${receiptUrl}, 
-        'pending',
-        ${formData.get('contractNotice') === 'on'},
-        ${duration}, 
-        ${accountClass},
-        ${selectedRoi},
-        ${signatureName}
-      )
-    `;
+    try {
+      await sql`
+        UPDATE memberships 
+        SET 
+          bank_name = ${bankName},
+          account_number = ${accountNumber},
+          payout_account_name = ${accountName}
+        WHERE id = ${memberId}
+      `;
 
-    // 6. Email Notification
+      await sql`
+        INSERT INTO investments (
+          member_id, member_email, amount, monthly_interest, 
+          bank_name, account_number, account_name, receipt_url, 
+          status, contract_accepted, duration, account_class, 
+          selected_roi, signature_name
+        )
+        VALUES (
+          ${memberId}, ${email}, ${amountToInvest}, ${totalInterest}, 
+          ${bankName}, ${accountNumber}, ${accountName}, ${receiptUrl}, 
+          'pending', ${formData.get('contractNotice') === 'on'}, 
+          ${duration}, ${accountClass}, ${selectedRoi}, ${signatureName}
+        )
+      `;
+
+      await sql`COMMIT`;
+    } catch (dbError: any) {
+      await sql`ROLLBACK`;
+      throw dbError;
+    }
+
+    // 6. Email (Non-blocking)
     try {
       const emailHtml = await render(
         React.createElement(InvestmentConfirmationEmail, {
@@ -181,21 +163,21 @@ export async function createInvestment(formData: FormData): Promise<{ success: b
       await resend.emails.send({
         from: 'SulejaHH MCoop <noreply@shhmcsoc.me>',
         to: [email],
-        subject: 'Investment Registration Received - SulejaHH',
+        subject: 'Investment Registration Received',
         html: emailHtml,
       });
-    } catch (emailError) {
-      console.error('Email Error (Non-blocking):', emailError);
-    }
+    } catch (e) { console.error('Email error:', e); }
 
     revalidatePath('/dashboard/investments');
-    return { success: true, message: 'Investment successfully recorded and member details updated!' };
+    return { success: true, message: 'Investment recorded successfully!' };
 
   } catch (error: any) {
     console.error('Action Error:', error);
     return { success: false, message: 'Database Error: ' + error.message };
   }
 }
+
+
 /**
  * ACTION: Create Membership
  */
@@ -207,13 +189,12 @@ export type ActionResponse = {
 
 // app/lib/actions.ts
 
-export async function createMembership(formData: FormData) {
+export async function createMembership(formData: FormData): Promise<ActionResponse> {
   try {
-    // 1. Upload files (including optional payment receipt)
+    // 1. Upload files
     const passport_url = await uploadFile(formData.get('passportFile') as File, 'passports');
     const id_card_url = await uploadFile(formData.get('idCardFile') as File, 'ids');
     
-    // Receipt is optional only if they didn't toggle investment
     let receipt_url = null;
     const receiptFile = formData.get('paymentReceipt') as File;
     if (receiptFile && receiptFile.size > 0) {
@@ -221,99 +202,124 @@ export async function createMembership(formData: FormData) {
     }
 
     // 2. Extract and format basic data
-    const email = (formData.get('email') as string).toLowerCase();
+    const email = (formData.get('email') as string).toLowerCase().trim();
+    const firstName = formData.get('firstName') as string;
+    const surname = formData.get('surname') as string;
     const tin = (formData.get('tin') as string) || 'N/A';
     const membershipType = (formData.get('membershipType') as string) || 'Nominal';
 
     // 3. Extract Investment Data (if provided)
     const amountToInvest = formData.get('amountToInvest') ? parseFloat(formData.get('amountToInvest') as string) : 0;
     const selectedRoi = formData.get('selectedRoi') ? parseInt(formData.get('selectedRoi') as string) : 0;
-    const duration = formData.get('duration') as string || null;
-    const accountName = formData.get('accountName') as string || null;
-    const bankName = formData.get('bankName') as string || null;
-    const accountNumber = formData.get('accountNumber') as string || null;
-    const accountClass = formData.get('accountClass') as string || null;
+    const duration = (formData.get('duration') as string) || '1 Month';
+    const accountName = (formData.get('accountName') as string) || null;
+    const bankName = (formData.get('bankName') as string) || null;
+    const accountNumber = (formData.get('accountNumber') as string) || null;
+    const accountClass = (formData.get('accountClass') as string) || 'Investment';
 
-    // 4. Execute SQL
-    await sql`
-      INSERT INTO memberships (
-        member_id, 
-        title, 
-        surname, 
-        first_name, 
-        middle_name, 
-        date_of_birth, 
-        gender, 
-        nationality, 
-        residential_address, 
-        tin, 
-        email, 
-        mobile_phone, 
-        passport_url, 
-        id_card_url, 
-        membership_type,
-        -- NEW INVESTMENT COLUMNS --
-        amount_to_invest,
-        selected_roi,
-        investment_duration,
-        payout_account_name,
-        bank_name,
-        account_number,
-        account_class,
-        payment_receipt_url
-      )
-      VALUES (
-        ${formData.get('member_id') as string || null}, 
-        ${formData.get('title') as string}, 
-        ${formData.get('surname') as string}, 
-        ${formData.get('firstName') as string}, 
-        ${formData.get('middle_name') as string || null}, 
-        ${formData.get('dateOfBirth') as string}, 
-        ${formData.get('gender') as string},
-        ${formData.get('nationality') as string || 'Nigerian'}, 
-        ${formData.get('residentialAddress') as string}, 
-        ${tin},
-        ${email}, 
-        ${formData.get('mobilePhone') as string}, 
-        ${passport_url}, 
-        ${id_card_url}, 
-        ${membershipType},
-        ${amountToInvest},
-        ${selectedRoi},
-        ${duration},
-        ${accountName},
-        ${bankName},
-        ${accountNumber},
-        ${accountClass},
-        ${receipt_url}
-      )
-    `;
+    // 4. Database Transaction
+    await sql`BEGIN`;
 
-    return { 
-      success: true, 
-      message: 'Membership created successfully!' 
-    };
+    try {
+      // Create Membership Record
+      const memberResult = await sql`
+        INSERT INTO memberships (
+          title, surname, first_name, middle_name, date_of_birth, 
+          gender, nationality, residential_address, tin, email, 
+          mobile_phone, passport_url, id_card_url, membership_type,
+          amount_to_invest, selected_roi, investment_duration,
+          payout_account_name, bank_name, account_number, 
+          account_class, payment_receipt_url
+        )
+        VALUES (
+          ${formData.get('title') as string}, ${surname}, ${firstName}, 
+          ${formData.get('middle_name') as string || null}, 
+          ${formData.get('dateOfBirth') as string}, 
+          ${formData.get('gender') as string},
+          ${formData.get('nationality') as string || 'Nigerian'}, 
+          ${formData.get('residentialAddress') as string}, ${tin}, ${email}, 
+          ${formData.get('mobilePhone') as string}, ${passport_url}, 
+          ${id_card_url}, ${membershipType}, ${amountToInvest}, 
+          ${selectedRoi}, ${duration}, ${accountName}, ${bankName}, 
+          ${accountNumber}, ${accountClass}, ${receipt_url}
+        )
+        RETURNING id
+      `;
 
-  } catch (error: any) {
-    // Check for Duplicate Email (Postgres error code 23505)
-    if (error.code === '23505' || error.message?.includes('unique constraint')) {
-      return {
-        success: false,
-        message: 'This email is already registered. Please use a different one.',
-      };
+      const memberId = memberResult.rows[0].id;
+
+      // 4.5 IMPORTANT: If there is an investment, insert it into the investments table
+      if (amountToInvest > 0) {
+        const months = getMonthsFromDuration(duration);
+        const totalInterest = Math.round(amountToInvest * (selectedRoi / 100) * months);
+
+        await sql`
+          INSERT INTO investments (
+            member_id, 
+            member_email, 
+            amount, 
+            monthly_interest, 
+            bank_name, 
+            account_number, 
+            account_name, 
+            receipt_url, 
+            status, 
+            contract_accepted, 
+            duration, 
+            account_class, 
+            selected_roi
+          )
+          VALUES (
+            ${memberId}, 
+            ${email}, 
+            ${amountToInvest}, 
+            ${totalInterest}, 
+            ${bankName}, 
+            ${accountNumber}, 
+            ${accountName}, 
+            ${receipt_url}, 
+            'pending', 
+            true, 
+            ${duration}, 
+            ${accountClass}, 
+            ${selectedRoi}
+          )
+        `;
+      }
+
+      await sql`COMMIT`;
+    } catch (dbError) {
+      await sql`ROLLBACK`;
+      throw dbError;
     }
 
-    console.error('Database Error Details:', error);
-    return {
-      success: false,
-      message: 'A database error occurred. Please try again later.',
-    };
+    // 5. Trigger Welcome Email (Non-blocking)
+    try {
+      const emailHtml = await render(
+        React.createElement(WelcomeMembershipEmail, { firstName })
+      );
+
+      await resend.emails.send({
+        from: 'SulejaHH MCoop <noreply@shhmcsoc.me>',
+        to: [email],
+        subject: 'Welcome to Suleja HH Multi-purpose Coop',
+        html: emailHtml,
+      });
+    } catch (e) {
+      console.error('Welcome Email failed to send:', e);
+    }
+
+    revalidatePath('/dashboard/investments');
+    return { success: true, message: 'Membership and Investment created successfully!' };
+
+  } catch (error: any) {
+    if (error.code === '23505') {
+      return { success: false, message: 'This email is already registered.' };
+    }
+    console.error('Membership Creation Error:', error);
+    return { success: false, message: 'A database error occurred.' };
   }
 }
-
-// app/lib/actions.ts
-
-// app/lib/actions.ts
 
 export async function checkEmailExists(email: string) {
   try {
