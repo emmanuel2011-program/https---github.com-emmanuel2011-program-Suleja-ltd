@@ -10,31 +10,35 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function sendDailyReminders() {
   try {
-    const expiringLoans = await sql`
+    // UPDATED: Targets loans where the repayment_date was between 1 and 6 days ago
+    const overdueLoans = await sql`
       SELECT 
         email, 
         first_name, 
         loan_amount, 
         repayment_date 
       FROM loan_applications 
-      WHERE status = 'approved' 
-      AND repayment_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
+      WHERE status = 'active' 
+      AND repayment_date::date BETWEEN 
+        (CURRENT_DATE - INTERVAL '6 days')::date 
+        AND 
+        (CURRENT_DATE - INTERVAL '1 day')::date
     `;
 
-    console.log(`Cron Task: Found ${expiringLoans.length} loans due tomorrow.`);
+    console.log(`Cron Task: Found ${overdueLoans.length} loans between 1-6 days overdue.`);
 
     const results = [];
 
-    for (const loan of expiringLoans) {
+    for (const loan of overdueLoans) {
       try {
         const { data, error } = await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [loan.email],
-          subject: 'Reminder: Your Loan Repayment is Due Tomorrow',
+          // UPDATED: Subject line changed to reflect overdue status
+          subject: 'IMPORTANT: Your Loan Repayment is Overdue',
           react: LoanReminderEmail({
             firstName: loan.first_name, 
             loanAmount: Number(loan.loan_amount).toLocaleString('en-NG'), 
-            // Ensures the date stays accurate to the DB entry
             repaymentDate: new Date(loan.repayment_date).toLocaleDateString('en-GB', {
                 weekday: 'long',
                 year: 'numeric',
@@ -51,8 +55,7 @@ export async function sendDailyReminders() {
           results.push({ email: loan.email, success: true });
         }
 
-        // --- THE FIX: RATE LIMIT PROTECTION ---
-        // Wait 600ms between each email to stay under 2 requests/second
+        // Rate limit protection: 600ms delay
         await delay(600);
 
       } catch (sendError) {
