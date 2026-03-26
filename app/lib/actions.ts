@@ -78,32 +78,61 @@ export async function registerUser(formData: FormData) {
 /**
  * ACTION: Create Investment
  */
+/**
+ * ACTION: Create Investment
+ */
 export async function createInvestment(formData: FormData): Promise<{ success: boolean; message: string }> {
   try {
-    const email = formData.get('email') as string;
+    // 1. Extract and sanitize all fields from formData
+    const email = (formData.get('email') as string)?.toLowerCase().trim();
     const amountToInvest = parseFloat(formData.get('amountToInvest') as string) || 0;
     const duration = (formData.get('investmentDuration') as string) || '1 Month';
     const accountClass = (formData.get('accountClass') as string) || 'Investment';
-    
-    // Get the selected ROI from the form
     const selectedRoi = parseFloat(formData.get('selectedRoi') as string) || 7;
+    
+    // Bank Details
+    const bankName = formData.get('bankName') as string;
+    const accountNumber = formData.get('accountNumber') as string;
+    const accountName = formData.get('accountName') as string; // Payout name
+    const signatureName = formData.get('signatureName') as string;
 
-    const memberResult = await sql`SELECT id FROM memberships WHERE email = ${email} LIMIT 1`;
+    // 2. Validate Member Existence
+    const memberResult = await sql`SELECT id FROM memberships WHERE LOWER(email) = ${email} LIMIT 1`;
+    
     if (memberResult.rows.length === 0) {
-      return { success: false, message: 'No member account found with this email.' };
+      return { success: false, message: 'No member account found with this email. Please register as a member first.' };
     }
     const memberId = memberResult.rows[0].id;
 
-    const receiptUrl = await uploadFile(formData.get('paymentReceipt') as File, 'receipts');
+    // 3. Handle File Upload
+    const receiptFile = formData.get('paymentReceipt') as File;
+    if (!receiptFile || receiptFile.size === 0) {
+       return { success: false, message: 'Payment receipt image/PDF is required.' };
+    }
+    
+    const receiptUrl = await uploadFile(receiptFile, 'receipts');
     if (!receiptUrl) {
-      return { success: false, message: 'Payment receipt is required.' };
+      return { success: false, message: 'Failed to upload receipt. Please try again.' };
     }
 
+    // 4. Calculate Interest
     const months = getMonthsFromDuration(duration);
-    
-    // FIX: Use Math.round to prevent floating point errors (like 499,999 instead of 500,000)
     const totalInterest = Math.round(amountToInvest * (selectedRoi / 100) * months);
 
+    // --- 5. THE FIX: UPDATE BOTH TABLES ---
+    
+    // First: Update member's bank info in 'memberships' so it's current
+    // We use 'payout_account_name' to match your schema error from earlier
+    await sql`
+      UPDATE memberships 
+      SET 
+        bank_name = ${bankName},
+        account_number = ${accountNumber},
+        payout_account_name = ${accountName}
+      WHERE id = ${memberId}
+    `;
+
+    // Second: Insert the actual record into 'investments'
     await sql`
       INSERT INTO investments (
         member_id, 
@@ -118,47 +147,50 @@ export async function createInvestment(formData: FormData): Promise<{ success: b
         contract_accepted, 
         duration, 
         account_class,
-        selected_roi 
+        selected_roi,
+        signature_name
       )
       VALUES (
         ${memberId}, 
         ${email}, 
         ${amountToInvest}, 
         ${totalInterest}, 
-        ${formData.get('bankName') as string}, 
-        ${formData.get('accountNumber') as string},
-        ${formData.get('accountName') as string},
+        ${bankName}, 
+        ${accountNumber},
+        ${accountName},
         ${receiptUrl}, 
         'pending',
         ${formData.get('contractNotice') === 'on'},
         ${duration}, 
         ${accountClass},
-        ${selectedRoi}
+        ${selectedRoi},
+        ${signatureName}
       )
     `;
 
+    // 6. Email Notification
     try {
       const emailHtml = await render(
         React.createElement(InvestmentConfirmationEmail, {
           amount: amountToInvest,
           duration: duration,
-          // FIX: Pass the rounded totalInterest so the email is also accurate
           interest: totalInterest 
         })
       );
 
       await resend.emails.send({
         from: 'SulejaHH MCoop <noreply@shhmcsoc.me>',
-        to: [email.toLowerCase()],
+        to: [email],
         subject: 'Investment Registration Received - SulejaHH',
         html: emailHtml,
       });
     } catch (emailError) {
-      console.error('Failed to send investment email:', emailError);
+      console.error('Email Error (Non-blocking):', emailError);
     }
 
     revalidatePath('/dashboard/investments');
-    return { success: true, message: 'Investment successfully recorded!' };
+    return { success: true, message: 'Investment successfully recorded and member details updated!' };
+
   } catch (error: any) {
     console.error('Action Error:', error);
     return { success: false, message: 'Database Error: ' + error.message };
