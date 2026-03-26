@@ -5,13 +5,13 @@ import {
   BanknotesIcon, 
   PhotoIcon, 
   PencilIcon, 
-  CheckCircleIcon, 
+  CheckCircleIcon,
+  ShieldCheckIcon 
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
 import { createInvestment } from '@/app/lib/actions'; 
 import { toast } from 'sonner';
 
-// 1. Define the response type clearly
 interface ActionResponse {
   success: boolean;
   message?: string;
@@ -20,15 +20,28 @@ interface ActionResponse {
 export default function InvestmentForm() {
   const [amount, setAmount] = useState<string>('');
   const [duration, setDuration] = useState<string>('1 Month');
+  const [selectedRoi, setSelectedRoi] = useState<number>(7); 
   const [interest, setInterest] = useState<number>(0);
   const [isPending, setIsPending] = useState(false);
   const [fileName, setFileName] = useState<string>('');
 
+  const roiOptions = [
+    { rate: 6, label: 'Starter', desc: 'Basic Tier' },
+    { rate: 7, label: 'Growth', desc: 'Standard Tier' },
+    { rate: 8, label: 'Wealth', desc: 'Premium Tier' },
+  ];
+
   useEffect(() => {
     const val = parseFloat(amount);
     const months = parseInt(duration) || 1;
-    setInterest(!isNaN(val) ? val * 0.07 * months : 0);
-  }, [amount, duration]);
+    
+    // FIX: Using Math.round prevents 499,999 errors caused by floating point math
+    const calculatedInterest = !isNaN(val) 
+      ? Math.round(val * (selectedRoi / 100) * months) 
+      : 0;
+      
+    setInterest(calculatedInterest);
+  }, [amount, duration, selectedRoi]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -41,9 +54,7 @@ export default function InvestmentForm() {
     const toastId = toast.loading('Recording investment...');
     
     try {
-      // 2. Explicitly cast the action result
       const result = await createInvestment(formData) as ActionResponse;
-      
       setIsPending(false);
 
       if (result.success) {
@@ -77,12 +88,36 @@ export default function InvestmentForm() {
           <input name="email" type="email" required className="w-full border-gray-200 rounded-md p-2.5 mt-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50" placeholder="member@example.com" />
         </div>
 
-        <div className="bg-blue-600 p-5 rounded-xl flex justify-between items-center shadow-inner">
-          <div className="w-1/2">
+        <div>
+          <label className="text-[10px] font-black uppercase text-gray-500 ml-1 mb-2 block">Select ROI Plan *</label>
+          <div className="grid grid-cols-3 gap-3">
+            {roiOptions.map((option) => (
+              <div
+                key={option.rate}
+                onClick={() => setSelectedRoi(option.rate)}
+                className={`cursor-pointer p-3 rounded-xl border-2 transition-all text-center ${
+                  selectedRoi === option.rate 
+                  ? 'border-blue-600 bg-blue-50' 
+                  : 'border-gray-100 hover:border-gray-200'
+                }`}
+              >
+                <p className="text-[9px] font-black uppercase text-gray-400">{option.label}</p>
+                <p className={`text-xl font-black ${selectedRoi === option.rate ? 'text-blue-700' : 'text-gray-700'}`}>
+                  {option.rate}%
+                </p>
+              </div>
+            ))}
+          </div>
+          <input type="hidden" name="selectedRoi" value={selectedRoi} />
+        </div>
+
+        <div className="bg-blue-600 p-5 rounded-xl flex justify-between items-center shadow-inner relative overflow-hidden">
+          <div className="w-1/2 z-10">
             <label className="text-[10px] font-black text-blue-100 uppercase tracking-widest">Amount to Invest (₦)</label>
             <input 
               name="amountToInvest" 
               type="number" 
+              min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="w-full bg-transparent text-3xl font-black outline-none text-white placeholder:text-blue-300" 
@@ -90,10 +125,11 @@ export default function InvestmentForm() {
               required
             />
           </div>
-          <div className="text-right border-l border-blue-400/30 pl-4">
-            <p className="text-[10px] text-blue-100 font-black uppercase tracking-widest">Est. Total ROI</p>
+          <div className="text-right border-l border-blue-400/30 pl-4 z-10">
+            <p className="text-[10px] text-blue-100 font-black uppercase tracking-widest">Est. {selectedRoi}% ROI</p>
             <p className="text-2xl font-black text-white">+₦{interest.toLocaleString()}</p>
           </div>
+          <ShieldCheckIcon className="absolute -right-4 -bottom-4 h-24 w-24 text-blue-500/20" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">

@@ -17,7 +17,7 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/app/ui/button';
-import { createMembership } from '@/app/lib/actions';
+import { createMembership, checkEmailExists } from '@/app/lib/actions'; // Added checkEmailExists
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 
@@ -25,6 +25,11 @@ export default function MembershipForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   
+  // Email Validation State
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
   const [files, setFiles] = useState<{ [key: string]: string }>({
     passport: '',
     idCard: '',
@@ -34,14 +39,36 @@ export default function MembershipForm() {
   const [wantsToInvest, setWantsToInvest] = useState(false);
   const [amountToInvest, setAmountToInvest] = useState<string>('');
   const [duration, setDuration] = useState<string>('1 Month (Renewable)');
+  const [selectedRoi, setSelectedRoi] = useState<number>(7);
   const [calculatedInterest, setCalculatedInterest] = useState<number>(0);
 
-  // Updated logic to calculate interest based on duration
+  // --- Real-time Email Check Logic ---
+  useEffect(() => {
+    if (email.length < 5 || !email.includes('@')) {
+      setEmailError('');
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsCheckingEmail(true);
+      const exists = await checkEmailExists(email);
+      if (exists) {
+        setEmailError('This email is already registered with Sforte.');
+      } else {
+        setEmailError('');
+      }
+      setIsCheckingEmail(false);
+    }, 600); // 600ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [email]);
+
+  // Interest Calculation
   useEffect(() => {
     const amount = parseFloat(amountToInvest);
     const months = parseInt(duration) || 1;
-    setCalculatedInterest(!isNaN(amount) ? (amount * 0.07 * months) : 0);
-  }, [amountToInvest, duration]);
+    setCalculatedInterest(!isNaN(amount) ? Math.round(amount * (selectedRoi / 100) * months) : 0);
+  }, [amountToInvest, duration, selectedRoi]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
     const file = e.target.files?.[0];
@@ -51,8 +78,13 @@ export default function MembershipForm() {
   };
 
   async function handleAction(formData: FormData): Promise<void> {
+    // Final check before submission
+    if (emailError) {
+      toast.error('Please use a unique email address');
+      return;
+    }
+
     const phone = formData.get('mobilePhone') as string;
-    
     if (phone.length !== 11) {
       toast.error('Mobile phone must be exactly 11 digits');
       return;
@@ -112,6 +144,7 @@ export default function MembershipForm() {
             setFiles({ passport: '', idCard: '', receipt: '' });
             setWantsToInvest(false);
             setAmountToInvest('');
+            setEmail(''); // Reset email
           }} className="bg-green-600">Add Another</Button>
           <Link href="/dashboard/memberships" className="px-6 py-2 bg-gray-100 rounded-lg text-gray-600">View Directory</Link>
         </div>
@@ -129,20 +162,35 @@ export default function MembershipForm() {
           Member Information
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2 flex gap-4">
-            <div className="flex-1">
-              <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Email *</label>
-              <input name="email" type="email" required className="mt-1 w-full rounded-md border py-2 px-3 text-sm focus:ring-2 focus:ring-green-500 outline-none" placeholder="email@example.com" />
+          <div className="md:col-span-2 flex flex-col gap-1">
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Email *</label>
+                <input 
+                  name="email" 
+                  type="email" 
+                  required 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`mt-1 w-full rounded-md border py-2 px-3 text-sm focus:ring-2 outline-none transition-colors ${
+                    emailError ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-green-500'
+                  }`} 
+                  placeholder="email@example.com" 
+                />
+              </div>
+              <div className="w-1/3">
+                <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Title *</label>
+                <select name="title" required className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none">
+                  <option value="Mr">Mr.</option>
+                  <option value="Mrs">Mrs.</option>
+                  <option value="Ms">Ms.</option>
+                  <option value="Dr">Dr.</option>
+                </select>
+              </div>
             </div>
-            <div className="w-1/3">
-              <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Title *</label>
-              <select name="title" required className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none">
-                <option value="Mr">Mr.</option>
-                <option value="Mrs">Mrs.</option>
-                <option value="Ms">Ms.</option>
-                <option value="Dr">Dr.</option>
-              </select>
-            </div>
+            {/* Status indicators for Email */}
+            {isCheckingEmail && <span className="text-[10px] text-blue-500 animate-pulse ml-1">Checking records...</span>}
+            {emailError && <span className="text-[10px] text-red-600 font-bold ml-1">{emailError}</span>}
           </div>
 
           <div>
@@ -173,7 +221,6 @@ export default function MembershipForm() {
             <input name="mobilePhone" type="tel" maxLength={11} required className="mt-1 w-full rounded-md border py-2 px-3 text-sm outline-none" placeholder="08012345678" />
           </div>
 
-          {/* NEW FIELD: TIN */}
           <div>
             <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 flex items-center gap-1">
               <IdentificationIcon className="h-3 w-3" /> TIN (Tax ID)
@@ -189,7 +236,6 @@ export default function MembershipForm() {
             </select>
           </div>
 
-          {/* NEW FIELD: MEMBERSHIP TYPE */}
           <div>
             <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 flex items-center gap-1">
               <TagIcon className="h-3 w-3" /> Membership Type *
@@ -207,6 +253,7 @@ export default function MembershipForm() {
           </div>
         </div>
       </div>
+
       {/* SECTION 2: DOCUMENT UPLOADS */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-800 mb-6 flex items-center gap-2">
@@ -254,14 +301,36 @@ export default function MembershipForm() {
           </div>
 
           <div className={`space-y-4 transition-all ${wantsToInvest ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-            
+            <div>
+              <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 mb-2 block">Select ROI Plan *</label>
+              <div className="grid grid-cols-3 gap-3">
+                {[6, 7, 8].map((rate) => (
+                  <div
+                    key={rate}
+                    onClick={() => wantsToInvest && setSelectedRoi(rate)}
+                    className={`cursor-pointer p-3 rounded-xl border-2 transition-all text-center ${
+                      selectedRoi === rate 
+                      ? 'border-blue-600 bg-white shadow-sm' 
+                      : 'border-gray-100 bg-gray-50/50 hover:border-gray-200'
+                    }`}
+                  >
+                    <p className={`text-sm font-black ${selectedRoi === rate ? 'text-blue-700' : 'text-gray-500'}`}>
+                      {rate}%
+                    </p>
+                    <p className="text-[8px] uppercase text-gray-400 font-bold">Monthly</p>
+                  </div>
+                ))}
+              </div>
+              <input type="hidden" name="selectedRoi" value={selectedRoi} />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {/* INVESTMENT AMOUNT */}
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 col-span-1">
                 <label className="text-[10px] font-bold uppercase text-blue-700">Initial Investment (₦)</label>
                 <input 
                   name="amountToInvest" 
                   type="number" 
+                  min="0"
                   value={amountToInvest}
                   onChange={(e) => setAmountToInvest(e.target.value)}
                   disabled={!wantsToInvest}
@@ -270,7 +339,6 @@ export default function MembershipForm() {
                 />
               </div>
 
-              {/* DURATION SELECT */}
               <div className="bg-white p-4 rounded-lg border border-gray-200 col-span-1">
                 <label className="text-[10px] font-bold uppercase text-gray-500 flex items-center gap-1">
                   <ClockIcon className="h-3 w-3" /> Duration
@@ -290,38 +358,62 @@ export default function MembershipForm() {
               </div>
             </div>
 
-            {/* ROI DISPLAY */}
             <div className="bg-green-50 p-3 rounded-md flex justify-between items-center border border-green-100">
-              <span className="text-[10px] font-bold uppercase text-green-700">Total ROI Calculation (7% Monthly)</span>
-              <p className="text-md font-black text-green-800">₦{calculatedInterest.toLocaleString()}</p>
+              <span className="text-[10px] font-bold uppercase text-green-700">
+                Total ROI Calculation ({selectedRoi}% Monthly)
+              </span>
+              <p className="text-md font-black text-green-800">
+                ₦{calculatedInterest.toLocaleString()}
+              </p>
             </div>
             
             <div className="grid grid-cols-1 gap-4">
-              {/* ACCOUNT NAME - NEW */}
               <div>
                 <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 flex items-center gap-1">
                   <UserCircleIcon className="h-3 w-3" /> Payout Account Name *
                 </label>
-                <input name="accountName" placeholder="Exact Name on Bank Account" disabled={!wantsToInvest} className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500" />
+                <input 
+                  name="accountName" 
+                  required={wantsToInvest} 
+                  placeholder="Exact Name on Bank Account" 
+                  disabled={!wantsToInvest} 
+                  className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500" 
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Bank Name *</label>
-                  <input name="bankName" placeholder="e.g. Zenith Bank" disabled={!wantsToInvest} className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none" />
+                  <input 
+                    name="bankName" 
+                    required={wantsToInvest} 
+                    placeholder="e.g. Zenith Bank" 
+                    disabled={!wantsToInvest} 
+                    className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none" 
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase text-gray-500 ml-1">Account Number *</label>
-                  <input name="accountNumber" placeholder="10 Digits" maxLength={10} disabled={!wantsToInvest} className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none" />
+                  <input 
+                    name="accountNumber" 
+                    required={wantsToInvest} 
+                    placeholder="10 Digits" 
+                    maxLength={10} 
+                    disabled={!wantsToInvest} 
+                    className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none" 
+                  />
                 </div>
               </div>
 
-              {/* ACCOUNT CLASS - NEW */}
               <div>
                 <label className="text-[10px] font-bold uppercase text-gray-500 ml-1 flex items-center gap-1">
                   <TagIcon className="h-3 w-3" /> Account Class
                 </label>
-                <select name="accountClass" disabled={!wantsToInvest} className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none">
+                <select 
+                  name="accountClass" 
+                  disabled={!wantsToInvest} 
+                  className="mt-1 w-full rounded-md border py-2 px-3 text-sm bg-white outline-none"
+                >
                   <option value="Investment">Investment Account</option>
                   <option value="Savings">Savings Account</option>
                   <option value="Current">Current Account</option>
@@ -333,13 +425,27 @@ export default function MembershipForm() {
               <label className="block text-center cursor-pointer">
                 <DocumentArrowUpIcon className={`h-7 w-7 mx-auto ${files.receipt ? 'text-blue-600' : 'text-blue-400'}`} />
                 <span className="block mt-2 text-xs font-bold text-blue-700 uppercase">{files.receipt ? 'Receipt Selected' : 'Proof of Payment *'}</span>
-                <input type="file" name="paymentReceipt" accept="image/*,application/pdf" disabled={!wantsToInvest} className="hidden" onChange={(e) => handleFileChange(e, 'receipt')} />
+                <input 
+                  type="file" 
+                  name="paymentReceipt" 
+                  accept="image/*,application/pdf" 
+                  required={wantsToInvest} 
+                  disabled={!wantsToInvest} 
+                  className="hidden" 
+                  onChange={(e) => handleFileChange(e, 'receipt')} 
+                />
                 <span className="text-[10px] text-blue-400 block truncate">{files.receipt || 'Upload transfer screenshot'}</span>
               </label>
             </div>
 
             <label className="flex items-start gap-3 mt-4">
-              <input name="contractNotice" type="checkbox" disabled={!wantsToInvest} className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600" />
+              <input 
+                name="contractNotice" 
+                type="checkbox" 
+                required={wantsToInvest} 
+                disabled={!wantsToInvest} 
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600" 
+              />
               <span className="text-xs text-gray-600 font-medium">I agree to give 1 month notice for withdrawal.</span>
             </label>
           </div>
@@ -363,7 +469,11 @@ export default function MembershipForm() {
 
       <div className="flex justify-end items-center gap-4">
         <Link href="/dashboard/memberships" className="text-sm font-medium text-gray-400 hover:text-gray-600">Discard</Link>
-        <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 px-10">
+        <Button 
+          type="submit" 
+          disabled={isLoading || !!emailError || isCheckingEmail} 
+          className="bg-green-600 hover:bg-green-700 px-10"
+        >
           {isLoading ? 'Registering...' : 'Submit Application'}
         </Button>
       </div>
