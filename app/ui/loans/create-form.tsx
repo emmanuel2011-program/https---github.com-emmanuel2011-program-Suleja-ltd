@@ -197,86 +197,100 @@ export default function LoanApplicationForm({ members }: { members: Membership[]
   };
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setIsLoading(true);
+  e.preventDefault();
+  setIsLoading(true);
 
-    try {
-      const formData = new FormData();
+  try {
+    const formData = new FormData();
 
-      // Append core fields
-      formData.append('your_title', form.yourTitle);
-      formData.append('first_name', form.firstName);
-      formData.append('surname', form.surname);
-      formData.append('middle_name', form.middleName);
-      formData.append('state_of_origin', form.stateOfOrigin);
-      formData.append('lga', form.lga);
-      formData.append('email', form.email);
-      formData.append('mobile_phone', form.mobilePhone);
-      formData.append('date_of_birth', form.dateOfBirth); 
-      formData.append('loan_amount', form.loanAmount);
-      formData.append('requested_date', form.requestedDate);
-      formData.append('purpose_of_loan', form.purposeOfLoan);
-      formData.append('full_residential_address', form.fullResidentialAddress);
-      formData.append('occupation', form.occupation);
-      formData.append('gender', form.gender);
-      formData.append('tin', form.tin.trim() || '');
-      formData.append('bank_name', form.bankName);
-      formData.append('account_number', form.accountNumber);
-      formData.append('account_name', form.accountName);
-      formData.append('account_type', form.accountType);
-      formData.append('interest', form.interest);
-      formData.append('duration', form.duration);
+    // 1. Append core identity and contact fields
+    formData.append('your_title', form.yourTitle);
+    formData.append('first_name', form.firstName);
+    formData.append('surname', form.surname);
+    formData.append('middle_name', form.middleName);
+    formData.append('state_of_origin', form.stateOfOrigin);
+    formData.append('lga', form.lga);
+    formData.append('email', form.email.toLowerCase().trim());
+    formData.append('mobile_phone', form.mobilePhone);
+    formData.append('date_of_birth', form.dateOfBirth);
+    formData.append('full_residential_address', form.fullResidentialAddress);
+    formData.append('occupation', form.occupation);
+    formData.append('gender', form.gender);
+    formData.append('tin', form.tin.trim() || '');
 
-      // Spouse / Next of Kin
-      formData.append('spouse_name', form.spouseName);
-      formData.append('spouse_mobile_phone', form.spouseMobilePhone);
-      formData.append('spouse_dob', form.spouseDOB);
-      formData.append('spouse_gender', form.spouseGender);
-      formData.append('spouse_residential_address', form.spouseResidentialAddress);
-      formData.append('spouse_title', form.spouseTitle);
-      formData.append('spouse_nationality', form.spouseNationality);
-      formData.append('spouse_state', form.spouseStateOfOrigin);
-      formData.append('spouse_lga', form.spouseLGA);
+    // 2. Append Bank and Loan Terms
+    formData.append('loan_amount', form.loanAmount);
+    formData.append('requested_date', form.requestedDate); // Crucial for back-dating
+    formData.append('purpose_of_loan', form.purposeOfLoan);
+    formData.append('bank_name', form.bankName);
+    formData.append('account_number', form.accountNumber);
+    formData.append('account_name', form.accountName);
+    formData.append('account_type', form.accountType);
+    formData.append('interest', form.interest);
+    formData.append('duration', form.duration);
 
-      // Interest and Repayment Logic
+    // 3. Spouse / Next of Kin
+    formData.append('spouse_name', form.spouseName);
+    formData.append('spouse_mobile_phone', form.spouseMobilePhone);
+    formData.append('spouse_dob', form.spouseDOB);
+    formData.append('spouse_gender', form.spouseGender);
+    formData.append('spouse_residential_address', form.spouseResidentialAddress);
+    formData.append('spouse_title', form.spouseTitle);
+    formData.append('spouse_nationality', form.spouseNationality);
+    formData.append('spouse_state', form.spouseStateOfOrigin);
+    formData.append('spouse_lga', form.spouseLGA);
+
+    // 4. Interest and Repayment Logic (Fixed for Back-Dating)
+    if (form.requestedDate) {
       const [year, month, day] = form.requestedDate.split('-').map(Number);
+      
+      // Creating date manually from parts prevents UTC timezone shifting
       const baseDate = new Date(year, month - 1, day);
+      
+      // Advance by 1 month for repayment
       baseDate.setMonth(baseDate.getMonth() + 1);
 
       const y = baseDate.getFullYear();
       const m = String(baseDate.getMonth() + 1).padStart(2, '0');
       const d = String(baseDate.getDate()).padStart(2, '0');
+      
       formData.append('repaymentDate', `${y}-${m}-${d}`);
       
       const principal = Number(form.loanAmount);
       const selectedRate = Number(form.interest) / 100;
-      formData.append('calculatedInterest', (principal * selectedRate).toString());
-
-      // Files
-      if (form.passportFile) {
-        const compressed = await compressImage(form.passportFile);
-        formData.append('passportFile', compressed, 'passport.jpg');
-      }
-      if (form.idCardFile) {
-        const compressed = await compressImage(form.idCardFile);
-        formData.append('idCardFile', compressed, 'idcard.jpg');
-      }
-
-      const response = await createLoan(null, formData); 
+      // Use Math.round to ensure clean currency values for the DB
+      const interestTotal = Math.round(principal * selectedRate);
       
-      if (response?.success) {
-        setSubmitted(true);
-      } else {
-        alert(response?.message || "Submission failed.");
-      }
-    } catch (err) {
-      console.error("Submission Error:", err);
-      alert("An error occurred. Please check your connection.");
-    } finally {
-      setIsLoading(false);
+      formData.append('calculatedInterest', interestTotal.toString());
     }
-  }
 
+    // 5. Image Processing and Compression
+    if (form.passportFile) {
+      const compressedPassport = await compressImage(form.passportFile);
+      formData.append('passportFile', compressedPassport, 'passport.jpg');
+    }
+    
+    if (form.idCardFile) {
+      const compressedId = await compressImage(form.idCardFile);
+      formData.append('idCardFile', compressedId, 'idcard.jpg');
+    }
+
+    // 6. Execute Server Action
+    const response = await createLoan(null, formData); 
+    
+    if (response?.success) {
+      setSubmitted(true);
+    } else {
+      // Direct feedback for the MD/User
+      alert(response?.message || "Loan submission failed. Please check the information provided.");
+    }
+  } catch (err) {
+    console.error("Submission Error:", err);
+    alert("An unexpected error occurred. Please verify your internet connection and try again.");
+  } finally {
+    setIsLoading(false);
+  }
+}
   function renderStep() {
     switch (step) {
       case 1:
