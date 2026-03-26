@@ -17,7 +17,14 @@ export const GuarantorConfirmationEmail = ({
   guarantorName: string;
   applicantName: string;
   loanAmount: string | number;
-}) => (
+}) => {
+  // Safe formatting: if it's already a string with commas, use it. 
+  // If it's a number, format it.
+  const displayAmount = typeof loanAmount === 'number' 
+    ? loanAmount.toLocaleString('en-NG') 
+    : loanAmount;
+
+  return (
   <Html>
     <Body style={{ backgroundColor: '#f6f9fc', padding: '20px', fontFamily: 'sans-serif' }}>
       <Container style={{ backgroundColor: '#ffffff', border: '1px solid #e1e1e1', padding: '40px', borderRadius: '10px' }}>
@@ -43,4 +50,5 @@ export const GuarantorConfirmationEmail = ({
       </Container>
     </Body>
   </Html>
-);
+);  
+};

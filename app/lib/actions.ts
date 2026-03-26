@@ -361,10 +361,10 @@ export async function createLoan(prevState: any, formData: FormData) {
         )
       `;
 
-      // try {
-      //   const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName: first_name, loanAmount: loan_amount.toLocaleString('en-NG'), duration: formData.get('duration') as string }));
-      //   await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
-      // } catch (e) { console.error("App email fail:", e); }
+      try {
+        const appHtml = await render(React.createElement(LoanConfirmationEmail, { firstName: first_name, loanAmount: loan_amount.toLocaleString('en-NG'), duration: formData.get('duration') as string }));
+        await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [email], subject: 'Application Received - SHHMCSOC', html: appHtml });
+      } catch (e) { console.error("App email fail:", e); }
     }
 
     revalidatePath('/dashboard/loans');
@@ -383,27 +383,27 @@ export async function createLoan(prevState: any, formData: FormData) {
 export async function updateLoanStatus(loanId: string, status: 'active' | 'rejected' | 'pending' | 'approved') {
   try {
     await sql`UPDATE loan_applications SET status = ${status} WHERE id = ${loanId}`;
-   // const loanResult = await sql`SELECT first_name, email, loan_amount, repayment_date, interest FROM loan_applications WHERE id = ${loanId} LIMIT 1`;
+   const loanResult = await sql`SELECT first_name, email, loan_amount, repayment_date, interest FROM loan_applications WHERE id = ${loanId} LIMIT 1`;
 
-    // if (loanResult.rows.length > 0) {
-    //   const loan = loanResult.rows[0] as any;
-    //   const principal = parseFloat(loan.loan_amount || '0');
-    //   const interestRate = parseFloat(String(loan.interest || '15%').replace('%', '')) / 100;
-    //   const calculatedInterestAmount = principal * interestRate; 
-    //   const totalRepayment = principal + calculatedInterestAmount;
+    if (loanResult.rows.length > 0) {
+      const loan = loanResult.rows[0] as any;
+      const principal = parseFloat(loan.loan_amount || '0');
+      const interestRate = parseFloat(String(loan.interest || '15%').replace('%', '')) / 100;
+      const calculatedInterestAmount = principal * interestRate; 
+      const totalRepayment = principal + calculatedInterestAmount;
 
-      // try {
-      //   const emailHtml = await render(React.createElement(LoanStatusEmail, {
-      //     firstName: loan.first_name,
-      //     status: status,
-      //     amount: principal,
-      //     interestAmount: calculatedInterestAmount, 
-      //     totalRepayment: totalRepayment,
-      //     repaymentDate: loan.repayment_date ? new Date(loan.repayment_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'
-      //   }));
-      //   await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [loan.email], subject: `Loan Application ${status.toUpperCase()} - SHHMCSOC`, html: emailHtml });
-      // } catch (e) { console.error("Status email fail:", e); }
-    // }
+      try {
+        const emailHtml = await render(React.createElement(LoanStatusEmail, {
+          firstName: loan.first_name,
+          status: status,
+          amount: principal,
+          interestAmount: calculatedInterestAmount, 
+          totalRepayment: totalRepayment,
+          repaymentDate: loan.repayment_date ? new Date(loan.repayment_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'
+        }));
+        await resend.emails.send({ from: 'SHHMCSOC Support <noreply@shhmcsoc.me>', to: [loan.email], subject: `Loan Application ${status.toUpperCase()} - SHHMCSOC`, html: emailHtml });
+      } catch (e) { console.error("Status email fail:", e); }
+    }
 
     revalidatePath('/dashboard/loans');
     revalidatePath('/dashboard/guarantors');
