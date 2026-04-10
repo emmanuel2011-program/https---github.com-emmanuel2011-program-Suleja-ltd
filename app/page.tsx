@@ -70,7 +70,7 @@ export default function Page() {
           <span className="text-green-800 font-black tracking-tighter text-lg uppercase">Suleja HH Co-op</span>
         </div>
         <Link 
-          href="/login" 
+          href="/login?role=investor" 
           className="text-sm font-bold text-green-700 hover:text-green-900 flex items-center gap-1"
         >
           Member Login <ChevronRightIcon className="h-4 w-4" />
