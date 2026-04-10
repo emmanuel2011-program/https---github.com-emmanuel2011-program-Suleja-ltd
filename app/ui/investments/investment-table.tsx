@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { EyeIcon, ArrowUpCircleIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, ArrowUpCircleIcon, MagnifyingGlassIcon, XMarkIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
 import { ApproveButton } from '@/app/ui/investments/buttons'; 
 import WithdrawalForm from '@/app/ui/investments/withdrawal-form';
 
@@ -18,7 +18,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
   );
 
   const openWithdrawal = (inv: any, e: React.MouseEvent) => {
-    e.stopPropagation(); // Stop the row click from opening the Large View
+    e.stopPropagation(); 
     setSelectedInv(inv);
     setIsModalOpen(true);
   };
@@ -37,7 +37,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
         />
       </div>
 
-      {/* --- LARGE EXPANDED VIEW (Shows when you click a row) --- */}
+      {/* --- LARGE EXPANDED VIEW --- */}
       {selectedInv && !isModalOpen && (
         <div className="bg-blue-900 text-white p-8 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 relative overflow-hidden border-b-4 border-blue-500">
           <button 
@@ -59,7 +59,14 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-blue-800 pt-8">
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-5 gap-6 border-t border-blue-800 pt-8">
+            {/* --- NEW DATE SECTION IN EXPANDED VIEW --- */}
+            <div>
+              <p className="text-blue-400 text-[10px] font-black uppercase mb-1">Date Joined</p>
+              <p className="font-bold text-lg text-white">
+                {selectedInv.created_at ? new Date(selectedInv.created_at).toLocaleDateString('en-NG') : 'N/A'}
+              </p>
+            </div>
             <div>
               <p className="text-blue-400 text-[10px] font-black uppercase mb-1">Monthly ROI</p>
               <p className="font-bold text-lg text-white">₦{Number(selectedInv.monthly_interest).toLocaleString()}</p>
@@ -83,11 +90,12 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
       {/* --- THE TABLE --- */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto"> 
-          <table className="min-w-[900px] w-full text-gray-900 border-collapse">
+          <table className="min-w-[1000px] w-full text-gray-900 border-collapse">
             <thead className="bg-gray-100 border-b border-gray-200 text-left text-[11px] font-black uppercase tracking-widest text-gray-700">
               <tr>
                 <th className="px-6 py-5">Customer Details</th>
                 <th className="px-6 py-5">Investment Amount</th>
+                <th className="px-6 py-5">Investment Date</th> {/* --- NEW COLUMN HEADER --- */}
                 <th className="px-6 py-5">7% ROI (Monthly)</th>
                 <th className="px-6 py-5">Duration</th>
                 <th className="px-6 py-5 text-center">Receipt</th>
@@ -98,7 +106,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
               {filteredInvestments.map((inv) => (
                 <tr 
                   key={inv.id} 
-                  onClick={() => setSelectedInv(inv)} // Click body to open Large View
+                  onClick={() => setSelectedInv(inv)} 
                   className={`cursor-pointer transition-colors ${selectedInv?.id === inv.id ? 'bg-blue-50 border-l-4 border-blue-500' : 'hover:bg-gray-50/80'}`}
                 >
                   <td className="px-6 py-4">
@@ -108,6 +116,24 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
                   <td className="px-6 py-4 font-black text-gray-900 text-lg">
                     ₦{Number(inv.amount).toLocaleString()}
                   </td>
+
+                  {/* --- NEW DATE COLUMN CELL --- */}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                        <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
+                        <div>
+                            <p className="text-sm font-bold text-gray-700">
+                            {inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-NG', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                            }) : 'N/A'}
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">Joined</p>
+                        </div>
+                    </div>
+                  </td>
+
                   <td className="px-6 py-4 text-green-700 font-bold text-md">
                     +₦{Number(inv.monthly_interest).toLocaleString()}
                   </td>
@@ -123,7 +149,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
                         href={inv.receipt_url} 
                         target="_blank" 
                         rel="noreferrer" 
-                        onClick={(e) => e.stopPropagation()} // Stop row click
+                        onClick={(e) => e.stopPropagation()} 
                         className="inline-flex items-center gap-1.5 text-blue-700 font-black text-sm underline"
                       >
                         <EyeIcon className="h-5 w-5" /> View Proof

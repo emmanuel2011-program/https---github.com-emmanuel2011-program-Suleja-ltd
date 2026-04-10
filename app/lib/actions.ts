@@ -533,8 +533,16 @@ export async function fetchActiveLoans(query?: string) {
   try {
     const data = await sql`
       SELECT 
-        id, first_name, surname, email, loan_amount, interest, 
-        repayment_date, tin, status,
+        id, 
+        first_name, 
+        surname, 
+        email, 
+        loan_amount, 
+        interest, 
+        repayment_date, 
+        request_date, -- ADDED THIS LINE
+        tin, 
+        status,
         COALESCE(amount_paid, 0) AS amount_paid, 
         last_payment_date
       FROM loan_applications 
@@ -677,13 +685,14 @@ export async function fetchAllInvestments() {
       JOIN users ON investments.member_email = users.email
       ORDER BY investments.created_at DESC
     `;
-    return data.rows;
+    
+    // For the 'postgres' library, data is already the array of results
+    return data; 
   } catch (error) {
     console.error('Database Error:', error);
     return [];
   }
 }
-
 
 
 export async function fetchInvestments(query: string = '') {
