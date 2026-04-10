@@ -686,14 +686,44 @@ export async function fetchAllInvestments() {
       ORDER BY investments.created_at DESC
     `;
     
-    // For the 'postgres' library, data is already the array of results
-    return data; 
+    // Ensure we are working with the rows array
+    const rows = Array.isArray(data) ? data : (data as any).rows || [];
+
+    // Map through and calculate the time-based ROI
+    const investments = rows.map((inv: any) => {
+      const startDate = new Date(inv.created_at);
+      const today = new Date();
+      
+      // 1. Calculate the difference in days
+      const diffTime = Math.abs(today.getTime() - startDate.getTime());
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      
+      /** * 2. THE SFORTE LOGIC: 
+       * Math.ceil rounds UP. 
+       * 0.1 days = 1 month
+       * 30.1 days = 2 months
+       * This ensures if they enter a single day of a new month, they get the ROI.
+       */
+      const monthsElapsed = Math.ceil(diffDays / 30) || 1; 
+
+      const monthlyInterest = Number(inv.monthly_interest) || 0;
+      const principal = Number(inv.amount) || 0;
+      const totalRoi = monthsElapsed * monthlyInterest;
+
+      return {
+        ...inv,
+        months_counted: monthsElapsed,
+        total_roi_due: totalRoi,
+        total_due: principal + totalRoi,
+      };
+    });
+
+    return investments; 
   } catch (error) {
     console.error('Database Error:', error);
     return [];
   }
 }
-
 
 export async function fetchInvestments(query: string = '') {
   const user = await getSessionInfo();
@@ -702,16 +732,13 @@ export async function fetchInvestments(query: string = '') {
     return [];
   }
 
-  // Normalize inputs to prevent "oko" vs "okoyee" style mismatches
   const userEmail = user.email.trim().toLowerCase();
   const searchPattern = `%${query.trim().toLowerCase()}%`;
 
-  console.log("DEBUG: Logged in as:", userEmail, "Is Admin:", user.isAdmin);
-
   try {
+    let data;
     if (user.isAdmin) {
-      // ADMIN: Can search across everything
-      const data = await sql`
+      data = await sql`
         SELECT i.*, m.first_name, m.surname 
         FROM investments i 
         LEFT JOIN memberships m ON i.member_id = m.id 
@@ -721,12 +748,8 @@ export async function fetchInvestments(query: string = '') {
           i.member_email ILIKE ${searchPattern} OR
           i.status ILIKE ${searchPattern}
         ORDER BY i.created_at DESC`;
-      return data.rows;
     } else {
-      // INVESTOR: Use LEFT JOIN so records appear even if membership profile is missing
-      console.log("DEBUG: Running Investor SQL for:", userEmail);
-      
-      const data = await sql`
+      data = await sql`
         SELECT i.*, m.first_name, m.surname 
         FROM investments i 
         LEFT JOIN memberships m ON i.member_id = m.id 
@@ -737,10 +760,40 @@ export async function fetchInvestments(query: string = '') {
           m.first_name ILIKE ${searchPattern}
         )
         ORDER BY i.created_at DESC`;
-      
-      console.log("DEBUG: Rows found for investor:", data.rows.length);
-      return data.rows;
     }
+
+    // Ensure we have an array of rows
+    const rows = Array.isArray(data) ? data : (data as any).rows || [];
+
+    // --- SFORTE ROI CALCULATION LOGIC ---
+    return rows.map((inv: any) => {
+      const startDate = new Date(inv.created_at);
+      const today = new Date();
+      
+      // Calculate day difference
+      const diffTime = Math.abs(today.getTime() - startDate.getTime());
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      
+      /** * CEILING LOGIC:
+       * 0-30 days = 1 month
+       * 31-60 days = 2 months
+       * 61+ days = 3 months
+       */
+      const monthsElapsed = Math.ceil(diffDays / 30) || 1; 
+
+      const principal = Number(inv.amount) || 0;
+      const monthlyInterest = Number(inv.monthly_interest) || 0;
+      const totalRoi = monthsElapsed * monthlyInterest;
+
+      return {
+        ...inv,
+        // These new fields can now be used in your Table UI
+        months_counted: monthsElapsed,
+        total_roi_due: totalRoi,
+        total_due: principal + totalRoi,
+      };
+    });
+
   } catch (error) {
     console.error('Fetch Error:', error);
     return [];
