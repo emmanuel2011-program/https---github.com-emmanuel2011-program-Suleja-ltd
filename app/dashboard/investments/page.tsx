@@ -21,44 +21,55 @@ export default async function Page(props: {
   const isAdmin = userRole.toLowerCase() === 'admin' || userRole.toLowerCase() === 'user';
 
   let safeInvestments: any[] = []; 
-  let connectionError = false;
 
   try {
     const rawData = await fetchInvestments(query);
     const investments = Array.isArray(rawData) ? rawData : (rawData as any)?.rows || [];
 
     safeInvestments = investments.map((inv: any) => {
-      const startDate = new Date(inv.created_at);
+      // 1. DATE & CYCLE MATH
+      const startDate = inv.created_at ? new Date(inv.created_at) : new Date();
       const today = new Date();
-      
-      // Calculate exact days passed
       const diffTime = Math.max(0, today.getTime() - startDate.getTime());
-      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       
-      // Sforte Logic: Day 1-30 = Cycle 1 | Day 31-60 = Cycle 2
-      const currentCycle = Math.ceil(diffDays / 30) || 1; 
+      // Automatic jump every 30 days
+      const completedCycles = Math.floor(diffDays / 30); 
 
-      // Data normalization
-      const principal = parseFloat(inv.amount) || 0;
-      const monthlyRate = parseFloat(inv.monthly_interest) || 0;
-      const totalRoi = currentCycle * monthlyRate;
-      const grandTotal = principal + totalRoi;
+      // 2. VALUE CONVERSION
+      const principal = Number(inv.amount) || 0;
+      const totalPlannedInterest = Number(inv.monthly_interest) || 0;
+      const durationMonths = parseInt(inv.duration) || 1;
+      const alreadyWithdrawn = Number(inv.total_withdrawn) || 0;
+
+      // 3. ROI CALCULATIONS
+      const monthlyRoi = totalPlannedInterest / durationMonths;
+      
+      // Total Accrued = Monthly ROI * Cycles passed
+      const totalAccruedSoFar = monthlyRoi * completedCycles;
+      
+      // Total Estimated ROI = The full interest potential (monthly_interest)
+      const totalEstimatedRoi = totalPlannedInterest;
+      
+      // Net Balance = (Principal + Accrued) - Withdrawals
+      const currentNetBalance = (principal + totalAccruedSoFar) - alreadyWithdrawn;
 
       return {
         ...inv,
         amount: principal,
-        monthly_interest: monthlyRate,
-        months_counted: currentCycle,
-        cycle: currentCycle, // Added Cycle property
-        total_roi_due: totalRoi,
-        total_due: grandTotal,
+        cycle: completedCycles, 
+        duration_num: durationMonths,
+        yield_in_naira: monthlyRoi, 
+        total_accrued: totalAccruedSoFar, 
+        estimated_roi: totalEstimatedRoi, // Passed to UI
+        total_due: currentNetBalance, 
+        withdrawn_to_date: alreadyWithdrawn,
         status: inv.status || 'pending' 
       };
     });
 
   } catch (error) {
     console.error('Data Fetch Error:', error);
-    connectionError = true;
   }
 
   return (
@@ -68,33 +79,17 @@ export default async function Page(props: {
           <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
             Investment Portfolio
           </h1>
-          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
-            Sforte Microfinance Management
+          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1">
+            Real-Time Automated Tracking
           </p>
         </div>
-        {connectionError && (
-          <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-lg border border-amber-100 animate-pulse">
-            <WifiIcon className="h-4 w-4" />
-            <span className="text-[10px] font-black uppercase">Syncing Live...</span>
-          </div>
-        )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-2 md:mt-8">
-        <Search placeholder="Search investments..." />
+      <div className="mt-4">
+        <Search placeholder="Search customer name..." />
       </div>
 
-      {connectionError && safeInvestments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-           <ExclamationTriangleIcon className="h-12 w-12 text-gray-300 mb-2" />
-           <p className="text-gray-500 font-bold uppercase text-[10px]">Connection Error</p>
-        </div>
-      ) : (
-        <InvestmentTable 
-          initialInvestments={safeInvestments} 
-          isAdmin={isAdmin} 
-        />
-      )}
+      <InvestmentTable initialInvestments={safeInvestments} isAdmin={isAdmin} />
     </div>
   );
 }
