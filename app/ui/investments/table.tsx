@@ -70,7 +70,7 @@ export default function InvestmentTable({ initialInvestments, isAdmin }: { initi
                     <td className="hidden sm:table-cell px-6 py-4">
                       <p className="text-sm font-black text-blue-700">+₦{Math.round(inv.total_accrued).toLocaleString()}</p>
                       <p className="text-[8px] text-emerald-600 font-bold uppercase tracking-tighter">
-                        Goal: ₦{Math.round(inv.estimated_roi).toLocaleString()}
+                        Estimated TotalROI: ₦{Math.round(inv.estimated_roi).toLocaleString()}
                       </p>
                     </td>
 
