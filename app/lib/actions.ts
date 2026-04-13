@@ -207,6 +207,7 @@ export async function createMembership(formData: FormData): Promise<ActionRespon
     const surname = formData.get('surname') as string;
     const tin = (formData.get('tin') as string) || 'N/A';
     const membershipType = (formData.get('membershipType') as string) || 'Nominal';
+    const signatureName = formData.get('signatureName') as string;
 
     // 3. Extract Investment Data (if provided)
     const amountToInvest = formData.get('amountToInvest') ? parseFloat(formData.get('amountToInvest') as string) : 0;
@@ -268,6 +269,7 @@ export async function createMembership(formData: FormData): Promise<ActionRespon
             duration, 
             account_class, 
             selected_roi
+            signature_name  -- 1
           )
           VALUES (
             ${memberId}, 
@@ -283,6 +285,7 @@ export async function createMembership(formData: FormData): Promise<ActionRespon
             ${duration}, 
             ${accountClass}, 
             ${selectedRoi}
+            ${signatureName} -- 2
           )
         `;
       }
