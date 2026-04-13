@@ -82,7 +82,7 @@ export default function InvestmentTable({ initialInvestments, isAdmin }: { initi
                         }`}>
                           Month {inv.cycle}
                         </span>
-                        <span className="text-[8px] text-gray-400 font-bold uppercase mt-1">Total {inv.duration_num}m</span>
+                        <span className="text-[8px] text-gray-400 font-bold uppercase mt-1">Total {inv.duration_num}month</span>
                       </div>
                     </td>
 
