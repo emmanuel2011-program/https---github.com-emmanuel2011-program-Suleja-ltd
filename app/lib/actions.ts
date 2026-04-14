@@ -1044,3 +1044,61 @@ export async function approveMembership(id: string, email: string, firstName: st
     return { success: false };
   }
 }
+
+// app/lib/actions.ts
+
+export async function getDashboardSummary() {
+  try {
+    const [loansData, investmentsData] = await Promise.all([
+      sql`SELECT loan_amount, interest, request_date, amount_paid, status FROM loan_applications`,
+      // Wrap in try-catch or ensure table exists to prevent 500 error
+      sql`SELECT amount, monthly_interest, created_at, status FROM investments`.catch(() => ({ rows: [] }))
+    ]);
+
+    // 1. Calculate Loan Totals (Mapping 'approved' to our active logic)
+    const loanSummary = loansData.rows
+      .filter(loan => {
+        const s = loan.status?.toLowerCase().trim();
+        return s === 'approved' || s === 'active'; 
+      })
+      .reduce((acc, loan) => {
+        // Parse principal and rate safely
+        const principal = Number(String(loan.loan_amount).replace(/[^0-9.]/g, '')) || 0;
+        const rate = parseFloat(String(loan.interest || '15').replace('%', '')) / 100;
+        
+        // Calculate months elapsed
+        const rDate = loan.request_date ? new Date(loan.request_date) : new Date();
+        const diffDays = Math.max(0, new Date().getTime() - rDate.getTime()) / (1000 * 60 * 60 * 24);
+        const months = Math.ceil(diffDays / 30) || 1;
+
+        const interest = (principal * rate) * months;
+        
+        acc.totalPrincipal += principal;
+        acc.totalInterest += interest;
+        acc.totalPaid += Number(loan.amount_paid || 0);
+        return acc;
+      }, { totalPrincipal: 0, totalInterest: 0, totalPaid: 0 });
+
+    // 2. Calculate Investment Totals
+    const investmentSummary = (investmentsData.rows || []).reduce((acc, inv) => {
+      const principal = Number(inv.amount) || 0;
+      const monthlyInt = Number(inv.monthly_interest) || 0;
+      
+      const cDate = inv.created_at ? new Date(inv.created_at) : new Date();
+      const diffDays = Math.max(0, new Date().getTime() - cDate.getTime()) / (1000 * 60 * 60 * 24);
+      const months = Math.ceil(diffDays / 30) || 1;
+
+      acc.totalValue += principal;
+      acc.accruedRoi += (monthlyInt * months);
+      return acc;
+    }, { totalValue: 0, accruedRoi: 0 });
+
+    return { loanSummary, investmentSummary };
+  } catch (error) {
+    console.error("Summary Fetch Error:", error);
+    return { 
+      loanSummary: { totalPrincipal: 0, totalInterest: 0, totalPaid: 0 }, 
+      investmentSummary: { totalValue: 0, accruedRoi: 0 } 
+    };
+  }
+}

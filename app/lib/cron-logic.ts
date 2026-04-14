@@ -5,17 +5,19 @@ import { LoanReminderEmail } from '@/app/ui/emails/loan-reminder';
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Helper to prevent Rate Limiting (429 errors)
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function sendDailyReminders() {
   try {
-    // UPDATED: Targets loans where the repayment_date was between 1 and 6 days ago
+    // 1. UPDATED QUERY: Fetch interest, request_date, and amount_paid
     const overdueLoans = await sql`
       SELECT 
         email, 
         first_name, 
         loan_amount, 
+        interest,
+        request_date,
+        amount_paid,
         repayment_date 
       FROM loan_applications 
       WHERE status = 'active' 
@@ -31,20 +33,24 @@ export async function sendDailyReminders() {
 
     for (const loan of overdueLoans) {
       try {
+        // 2. MATH LOGIC: Calculate Months Elapsed (Matching your Dashboard Table)
+        const requestDateObj = new Date(loan.request_date);
+        const today = new Date();
+        const diffTime = Math.max(0, today.getTime() - requestDateObj.getTime());
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        const monthsElapsed = Math.ceil(diffDays / 30) || 1;
+
+        // 3. SEND EMAIL: Passing all necessary accurate data
         const { data, error } = await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [loan.email],
-          // UPDATED: Subject line changed to reflect overdue status
-          subject: 'IMPORTANT: Your Loan Repayment is Overdue',
+          subject: `IMPORTANT: Your Loan Repayment is Overdue (Month ${monthsElapsed})`,
           react: LoanReminderEmail({
             firstName: loan.first_name, 
-            loanAmount: Number(loan.loan_amount).toLocaleString('en-NG'), 
-            repaymentDate: new Date(loan.repayment_date).toLocaleDateString('en-GB', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            }),
+            loanAmount: Number(loan.loan_amount), // Pass as number for component math
+            interestRate: loan.interest || '15%', // Pass as string (e.g., "15%")
+            requestDate: loan.request_date,       // Pass for time calculation
+            amountPaid: Number(loan.amount_paid || 0), // Include paid amount
           }),
         });
 
@@ -55,7 +61,6 @@ export async function sendDailyReminders() {
           results.push({ email: loan.email, success: true });
         }
 
-        // Rate limit protection: 600ms delay
         await delay(600);
 
       } catch (sendError) {
