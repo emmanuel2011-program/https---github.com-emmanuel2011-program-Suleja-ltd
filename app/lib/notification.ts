@@ -11,6 +11,9 @@ export async function checkAndSendReminders() {
       email, 
       first_name, 
       loan_amount, 
+      interest,      -- Added: needed for interest math
+      request_date,  -- Added: needed for months elapsed
+      amount_paid,   -- Added: needed for balance
       repayment_date 
     FROM loan_applications 
     WHERE status = 'approved' 
@@ -21,28 +24,17 @@ export async function checkAndSendReminders() {
 
   for (const loan of expiringLoans) {
     try {
-      // 1. Fix the Date Jump (Force UTC so it stays on the 10th)
-      const formattedDate = new Date(loan.repayment_date).toLocaleDateString('en-NG', {
-        timeZone: 'UTC', 
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-
-      // 2. Fix the Currency (Ensure Naira formatting)
-      const formattedAmount = new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-      }).format(loan.loan_amount / 100); // Divided by 100 if stored in kobo
-
+      // Send the email using the props the component actually expects
       const { data, error } = await resend.emails.send({
-        from: 'SulejaHH <onboarding@resend.dev>',
+        from: 'SulejaHH <info@shhmcsoc.me>',
         to: [loan.email],
         subject: 'Urgent: Your Loan Repayment is Due Tomorrow',
         react: LoanReminderEmail({
           firstName: loan.first_name, 
-          loanAmount: formattedAmount, 
-          repaymentDate: formattedDate,
+          loanAmount: loan.loan_amount,     // Component handles the formatting
+          interestRate: loan.interest,      // Component handles the parsing
+          requestDate: loan.request_date,   // Component calculates months from this
+          amountPaid: Number(loan.amount_paid || 0),
         }),
       });
 
