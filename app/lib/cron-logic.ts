@@ -9,9 +9,8 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function sendDailyReminders() {
   try {
-    // 1. FETCH TARGETED LOANS: 
-    // Filters for people due on the 16th or 17th of any month
-    const targetLoans = await sql`
+    // 1. UPDATED QUERY: Fetch interest, request_date, and amount_paid
+    const overdueLoans = await sql`
       SELECT 
         email, 
         first_name, 
@@ -21,43 +20,37 @@ export async function sendDailyReminders() {
         amount_paid,
         repayment_date 
       FROM loan_applications 
-      WHERE 
-        -- Matches 'approved' or 'Approved' status
-        LOWER(TRIM(status)) = 'approved' 
-        
-        -- Filter by day of the month (16th and 17th)
-        AND EXTRACT(DAY FROM repayment_date) IN (16, 17)
-        
-        -- Only those who still owe money
-        AND (amount_paid::numeric < loan_amount::numeric)
+      WHERE status = 'approved' 
+      AND repayment_date::date BETWEEN 
+        (CURRENT_DATE - INTERVAL '6 days')::date 
+        AND 
+        (CURRENT_DATE - INTERVAL '1 day')::date
     `;
 
-    console.log(`Cron: Found ${targetLoans.length} loans due on the 16th/17th.`);
+    console.log(`Cron Task: Found ${overdueLoans.length} loans between 1-6 days overdue.`);
 
     const results = [];
 
-    for (const loan of targetLoans) {
+    for (const loan of overdueLoans) {
       try {
-        // 2. MATH LOGIC: Calculate Months Elapsed
+        // 2. MATH LOGIC: Calculate Months Elapsed (Matching your Dashboard Table)
         const requestDateObj = new Date(loan.request_date);
         const today = new Date();
         const diffTime = Math.max(0, today.getTime() - requestDateObj.getTime());
         const diffDays = diffTime / (1000 * 60 * 60 * 24);
-        
-        // Ceil ensures if it's month 5.1, it shows as Month 6
         const monthsElapsed = Math.ceil(diffDays / 30) || 1;
 
-        // 3. SEND EMAIL via Resend
+        // 3. SEND EMAIL: Passing all necessary accurate data
         const { data, error } = await resend.emails.send({
           from: 'SulejaHH Cooperative <info@shhmcsoc.me>',
           to: [loan.email],
-          subject: `Loan Repayment Update: ${loan.first_name} (Month ${monthsElapsed})`,
+          subject: `IMPORTANT: Your Loan Repayment is Overdue (Month ${monthsElapsed})`,
           react: LoanReminderEmail({
             firstName: loan.first_name, 
-            loanAmount: Number(loan.loan_amount),
-            interestRate: loan.interest || '15%', 
-            requestDate: loan.request_date,
-            amountPaid: Number(loan.amount_paid || 0),
+            loanAmount: Number(loan.loan_amount), // Pass as number for component math
+            interestRate: loan.interest || '15%', // Pass as string (e.g., "15%")
+            requestDate: loan.request_date,       // Pass for time calculation
+            amountPaid: Number(loan.amount_paid || 0), // Include paid amount
           }),
         });
 
@@ -65,15 +58,13 @@ export async function sendDailyReminders() {
           console.error(`Resend error for ${loan.email}:`, error);
           results.push({ email: loan.email, success: false, error });
         } else {
-          console.log(`Successfully sent reminder to ${loan.email}`);
           results.push({ email: loan.email, success: true });
         }
 
-        // Anti-spam delay
         await delay(600);
 
-      } catch (sendError: any) {
-        console.error(`Failed to process ${loan.email}:`, sendError.message);
+      } catch (sendError) {
+        console.error(`Failed to send to ${loan.email}:`, sendError);
         results.push({ email: loan.email, success: false });
       }
     }
