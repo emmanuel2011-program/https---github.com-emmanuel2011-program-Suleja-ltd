@@ -21,7 +21,7 @@ export async function sendDailyReminders() {
         amount_paid,
         repayment_date 
       FROM loan_applications 
-      WHERE id = '97bff4d9-5ed0-4e2e-b61a-51dad74610f2'
+      WHERE id = '1ffaa285-d598-43e3-89c6-30c4a3bd0f06'
       -- Logic: Send if (Today + 1 Day) matches the Repayment Date
       AND repayment_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
       AND (amount_paid::numeric < loan_amount::numeric)
