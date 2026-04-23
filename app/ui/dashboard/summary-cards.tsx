@@ -1,13 +1,21 @@
+'use client';
+
 import {
   BanknotesIcon,
   ClockIcon,
-  UserGroupIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link';
 
-export default function SummaryCards({ data }: { data: any }) {
+// Added 'role' to the props definition
+export default function SummaryCards({ data, role }: { data: any, role: string }) {
   const { loanSummary, investmentSummary } = data;
+
+  // 1. SECURITY CHECK: If the role is 'investor', do not render anything.
+  // This prevents the entire grid from appearing.
+  if (role?.toLowerCase() === 'investor') {
+    return null; 
+  }
 
   const totalLoanValue = (loanSummary.totalPrincipal + loanSummary.totalInterest) - loanSummary.totalPaid;
   const totalInvestmentValue = investmentSummary.totalValue + investmentSummary.accruedRoi;
@@ -19,7 +27,7 @@ export default function SummaryCards({ data }: { data: any }) {
       sub: 'View all active loans',
       icon: BanknotesIcon,
       color: 'bg-blue-50 text-blue-600',
-      href: '/dashboard/active-loans', // Path to your loans page
+      href: '/dashboard/active-loans',
     },
     {
       title: 'Accrued Interest',
@@ -35,7 +43,7 @@ export default function SummaryCards({ data }: { data: any }) {
       sub: 'View all active investments',
       icon: ClockIcon,
       color: 'bg-purple-50 text-purple-600',
-      href: '/dashboard/investments', // Path to your investments page
+      href: '/dashboard/investments',
     },
   ];
 

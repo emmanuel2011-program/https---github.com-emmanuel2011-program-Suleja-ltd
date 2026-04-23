@@ -1,97 +1,96 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { 
-  UserGroupIcon, 
   CurrencyDollarIcon, 
-  ClockIcon 
+  XMarkIcon 
 } from '@heroicons/react/24/outline';
+import { sql } from '@vercel/postgres'; // Added direct SQL for withdrawal fetch
 import { fetchAllInvestments } from '@/app/lib/actions';
 import InvestmentTable from '@/app/ui/investments/table'; 
 import WithdrawalAlert from '@/app/ui/admin/withdrawal-alert';
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ query?: string }>; 
+}) {
   const session = await auth();
+  const params = await searchParams;
+  const query = params?.query || ''; 
   
-  // 1. ROLE CHECK
-  const rawRole = (session?.user as any)?.role || '';
-  const isAdmin = rawRole.toLowerCase() === 'user'; 
+  const user = session?.user as any;
+  const rawRole = user?.role?.toLowerCase().trim() || ''; 
+  const isAdmin = rawRole === 'user' || rawRole === 'admin';
 
-  // 2. SECURITY REDIRECT
   if (!isAdmin) {
-    redirect('/dashboard');
+    redirect('/dashboard/membership');
   }
 
-  // 3. FETCH DATA WITH FALLBACK
-  const rawInvestments = await fetchAllInvestments();
+  let displayData = [];
 
-  // Guard against QueryResult vs Array type mismatch
-  const dataArray = Array.isArray(rawInvestments) 
-    ? rawInvestments 
-    : (rawInvestments as any)?.rows || [];
+  try {
+    // 1. Fetch main investment records
+    const allInvestments = await fetchAllInvestments();
+    
+    // 2. Fetch specific pending withdrawal requests
+    const withdrawalsResult = await sql`
+      SELECT * FROM investment_withdrawals 
+      WHERE status = 'pending'
+    `;
+    const pendingWithdrawals = withdrawalsResult.rows;
 
-  // 4. CLEAN DATA
-  const investments = dataArray.map((inv: any) => ({
-    ...inv,
-    amount: Math.round(Number(inv.amount)),
-    monthly_interest: Math.round(Number(inv.monthly_interest)),
-    status: inv.status || 'pending' 
-  }));
+    // 3. Merge data so the table has everything needed for approval
+    displayData = pendingWithdrawals
+      .filter((w: any) => 
+        query ? w.member_email?.toLowerCase() === query.toLowerCase() : true
+      )
+      .map((w: any) => {
+        // Find the matching main investment record for principal/ROI details
+        const inv = allInvestments.find((i: any) => i.id === w.investment_id);
+        
+        return {
+          ...inv, // Contains name, original principal
+          ...w,   // Contains withdrawal amount, withdrawal_id
+          withdrawal_id: w.id, 
+          requested_amount: Number(w.amount),
+          total_accrued: inv?.total_roi_due || 0, // Accrued ROI from your ROI logic
+          current_principal: inv?.amount || 0,
+        };
+      });
 
-  // FIX: Explicitly type 'acc' as number to satisfy TypeScript build
-  const totalAmount = investments.reduce((acc: number, inv: any) => acc + inv.amount, 0);
+  } catch (error) {
+    console.error("ADMIN DATA FETCH ERROR:", error);
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <WithdrawalAlert />
 
-        <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-green-800 tracking-tight uppercase">
-              Admin Control Panel
-            </h1>
-            <p className="text-xs text-gray-500 mt-1 uppercase font-bold tracking-widest">
-              Logged in as: <span className="text-green-700">{rawRole}</span>
-            </p>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-2xl md:text-3xl font-black text-green-800 tracking-tight uppercase">
+            Admin Control Panel
+          </h1>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-10">
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-50 rounded-lg">
-                <CurrencyDollarIcon className="h-8 w-8 text-green-600" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Portfolio</p>
-                <p className="text-2xl font-black text-gray-900">₦{totalAmount.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <UserGroupIcon className="h-8 w-8 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Members</p>
-                <p className="text-2xl font-black text-gray-900">{investments.length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-10">
-          <div className="flex items-center justify-between mb-4">
+        <div id="verification-queue" className="mt-10 scroll-mt-10">
+          <div className="flex items-center justify-between mb-4 border-b pb-4">
             <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">
-              Investment Verification Queue
+              {query ? `Reviewing Payout for: ${query}` : 'Pending Payout Verification'}
             </h2>
+            
+            {query && (
+              <Link href="/dashboard/admin" className="flex items-center gap-1 text-xs font-bold text-blue-600 uppercase">
+                <XMarkIcon className="w-4 h-4" />
+                Show All Pending
+              </Link>
+            )}
           </div>
           
+          {/* InvestmentTable now receives the withdrawal details + principal + ROI */}
           <InvestmentTable 
-            initialInvestments={investments} 
+            initialInvestments={displayData} 
             isAdmin={isAdmin} 
           />
         </div>

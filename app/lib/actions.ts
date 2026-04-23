@@ -565,7 +565,7 @@ export async function fetchActiveLoans(query?: string) {
 }
 
 
-// Inside app/lib/actions.ts
+
 const ITEMS_PER_PAGE = 6;
 
 export async function fetchFilteredLoans(
@@ -682,8 +682,7 @@ export async function fetchAllInvestments() {
     const data = await sql`
       SELECT 
         investments.*, 
-        users.first_name, 
-        users.surname 
+        users.name -- Using 'name' since 'first_name' and 'surname' don't exist
       FROM investments
       JOIN users ON investments.member_email = users.email
       ORDER BY investments.created_at DESC
@@ -705,7 +704,6 @@ export async function fetchAllInvestments() {
        * Math.ceil rounds UP. 
        * 0.1 days = 1 month
        * 30.1 days = 2 months
-       * This ensures if they enter a single day of a new month, they get the ROI.
        */
       const monthsElapsed = Math.ceil(diffDays / 30) || 1; 
 
@@ -713,8 +711,15 @@ export async function fetchAllInvestments() {
       const principal = Number(inv.amount) || 0;
       const totalRoi = monthsElapsed * monthlyInterest;
 
+      // Handle the name split if your UI still expects first_name/surname
+      const nameParts = inv.name ? inv.name.trim().split(' ') : ['Member'];
+      const firstName = nameParts[0];
+      const surname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
       return {
         ...inv,
+        first_name: firstName, // Mapping back to UI expectations
+        surname: surname,
         months_counted: monthsElapsed,
         total_roi_due: totalRoi,
         total_due: principal + totalRoi,
@@ -835,26 +840,52 @@ export async function requestWithdrawal(formData: FormData): Promise<{ success: 
     // 1. Get the verified session from NextAuth
     const session = await auth();
     const sessionEmail = session?.user?.email?.toLowerCase();
+    
 
     if (!sessionEmail) {
       return { success: false, message: 'You must be logged in to perform this action.' };
     }
+    const user = session?.user as any; 
+    console.log("DEBUG: User Role is ->", user?.role);
 
     const investmentId = formData.get('investmentId') as string;
     const amountToWithdraw = parseFloat(formData.get('amount') as string) || 0;
 
-    // 2. Verify Member exists using the SESSION email
-    const memberResult = await sql`
+    // 2. Verify Member exists
+    const formEmail = formData.get('email') as string;
+
+    // Try searching by the logged-in session email FIRST
+    let memberResult = await sql`
       SELECT id FROM memberships 
       WHERE LOWER(email) = ${sessionEmail} 
       LIMIT 1
     `;
-    
-    if (memberResult.rows.length === 0) {
-      return { success: false, message: 'Your member profile was not found.' };
-    }
-    const memberId = memberResult.rows[0].id;
 
+    // BACKUP: If session email fails, try the email passed from the UI form
+    if (memberResult.rows.length === 0 && formEmail) {
+      memberResult = await sql`
+      SELECT id FROM memberships 
+      WHERE LOWER(email) = ${formEmail.toLowerCase()} 
+      LIMIT 1
+      `;
+   }
+
+      // FINAL BACKUP: If both fail, search by name if the name is in the session
+    if (memberResult.rows.length === 0) {
+        const sessionName = session?.user?.name;
+        if (sessionName) {
+            memberResult = await sql`
+              SELECT id FROM memberships 
+              WHERE first_name ILIKE ${`%${sessionName}%`}
+             LIMIT 1
+          `;
+      }
+    }
+
+    if (memberResult.rows.length === 0) {
+      return { success: false, message: 'Your member profile was not found. Please verify your email.' };
+  }
+    const memberId = memberResult.rows[0].id;
     // 3. Verify Investment exists, belongs to THIS member, and is active
     const invResult = await sql`
       SELECT amount, status FROM investments 
@@ -881,6 +912,7 @@ export async function requestWithdrawal(formData: FormData): Promise<{ success: 
     await sql`
       INSERT INTO investment_withdrawals (
         member_id, 
+        member_email,
         investment_id, 
         amount, 
         bank_name, 
@@ -890,6 +922,7 @@ export async function requestWithdrawal(formData: FormData): Promise<{ success: 
       )
       VALUES (
         ${memberId},
+        ${sessionEmail},
         ${investmentId},
         ${amountToWithdraw},
         ${formData.get('bankName') as string},
@@ -917,11 +950,11 @@ export async function approveWithdrawal(withdrawalId: string) {
   try {
     // 1. Get withdrawal details
     const result = await sql`SELECT * FROM investment_withdrawals WHERE id = ${withdrawalId} LIMIT 1`;
-    if (result.rows.length === 0) return { success: false, message: 'Not found' };
+    if (result.rows.length === 0) return { success: false, message: 'Withdrawal record not found' };
     
     const withdrawal = result.rows[0];
 
-    // 2. Deduct from the main investment
+    // 2. Deduct from the main investment balance
     await sql`
       UPDATE investments 
       SET amount = amount - ${withdrawal.amount}
@@ -931,12 +964,32 @@ export async function approveWithdrawal(withdrawalId: string) {
     // 3. Mark withdrawal as paid
     await sql`UPDATE investment_withdrawals SET status = 'paid' WHERE id = ${withdrawalId}`;
 
-    revalidatePath('/dashboard/withdrawals');
+    // 4. Refresh the admin page so the pending request disappears
+    revalidatePath('/dashboard/admin');
+    
     return { success: true, message: 'Withdrawal approved and balance updated.' };
+  } catch (error: any) {
+    console.error("Approve Withdrawal Error:", error);
+    return { success: false, message: error.message };
+  }
+}
+
+// app/lib/actions.ts
+
+export async function declineWithdrawal(withdrawalId: string) {
+  try {
+    await sql`
+      UPDATE investment_withdrawals 
+      SET status = 'declined' 
+      WHERE id = ${withdrawalId}
+    `;
+    revalidatePath('/dashboard/admin');
+    return { success: true, message: 'Withdrawal request declined.' };
   } catch (error: any) {
     return { success: false, message: error.message };
   }
 }
+
 /**
  * ACTION: Fetch Loan Pages (Pagination Count)
  */

@@ -1,3 +1,4 @@
+// auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from './auth.config';
@@ -17,8 +18,6 @@ async function getUser(email: string): Promise<User | undefined> {
     throw new Error('Failed to fetch user.');
   }
 }
-
-// ... existing imports (NextAuth, Credentials, etc.)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -48,24 +47,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   
   callbacks: {
     async jwt({ token, user }) {
+      // This block only runs on sign-in
       if (user) {
         const adminEmails = ['admin@shhmcsoc.me', 'info@shhmcsoc.me'];
-        const userEmail = user.email?.toLowerCase() || '';
+        const userEmail = user.email?.toLowerCase().trim() || '';
         const isHardcodedAdmin = adminEmails.includes(userEmail);
 
-        // THE FIX: 
-        // 1. Check the database role first.
-        // 2. If it's one of the hardcoded emails, force the role to 'user' (your admin role).
-        // 3. Otherwise, default to 'investor'.
-        token.role = (user as any).role || (isHardcodedAdmin ? 'user' : 'investor');
+        // STRICTOR ROLE ASSIGNMENT
+        if (isHardcodedAdmin) {
+          token.role = 'user'; // Hardcoded emails are always Admins
+        } else {
+          // Use the DB role if it exists, otherwise force 'investor'
+          const dbRole = (user as any).role?.toLowerCase().trim();
+          token.role = dbRole && dbRole !== '' ? dbRole : 'investor';
+        }
+
         token.email = userEmail;
+        
+        // Debugging: This will show in your VS Code / Terminal console
+        console.log(`[Auth-JWT] Role assigned to ${userEmail}: ${token.role}`);
       }
       return token;
     },
 
     async session({ session, token }) {
       if (session.user) {
-        // Pass the corrected 'user' or 'investor' role to the session
+        // Transfer the role from the JWT token to the Session object
         (session.user as any).role = token.role;
         session.user.email = token.email as string;
       }
