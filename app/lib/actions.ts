@@ -4,7 +4,7 @@ import React from 'react';
 import { signIn, auth } from '@/auth';
 import { AuthError } from 'next-auth';
 import { sql } from '@vercel/postgres';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { put } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend'; 
