@@ -17,6 +17,9 @@ import { LoanConfirmationEmail } from '@/app/ui/emails/loan-confirmation';
 import { LoanStatusEmail } from '@/app/ui/emails/loan-status';
 import { GuarantorConfirmationEmail } from '@/app/ui/emails/guarantor-confirmation';
 import { InvestmentConfirmationEmail } from '@/app/ui/emails/investment-confirmation';
+import postgres from 'postgres';
+
+const db = postgres(process.env.POSTGRES_URL!);
 
 // Helper to get the current user and determine if they are an admin
 async function getSessionInfo() {
@@ -495,6 +498,18 @@ export async function createLoan(prevState: any, formData: FormData) {
     return { success: false, message: `System Error: ${error.message}` };
   }
 }
+
+
+
+// Define the shape of the data coming from the database
+interface Applicant {
+  name: string;
+  email: string;
+  address: string;
+  occupation: string;
+  membership_type: string;
+}
+
 
 /**
  * ACTION: Update Loan Status

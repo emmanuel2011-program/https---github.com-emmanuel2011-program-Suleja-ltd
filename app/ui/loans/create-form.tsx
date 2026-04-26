@@ -17,6 +17,8 @@ import { Button } from '@/app/ui/button';
 import { createLoan } from '@/app/lib/actions';
 import { Membership } from '@/app/lib/definitions';
 
+
+
 // --- UTILITY: IMAGE COMPRESSION ---
 async function compressImage(file: File): Promise<Blob | File> {
   const maxSize = 2 * 1024 * 1024; // 2MB
