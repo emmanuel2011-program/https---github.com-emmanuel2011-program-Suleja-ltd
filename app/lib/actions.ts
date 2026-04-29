@@ -18,6 +18,8 @@ import { LoanStatusEmail } from '@/app/ui/emails/loan-status';
 import { GuarantorConfirmationEmail } from '@/app/ui/emails/guarantor-confirmation';
 import { InvestmentConfirmationEmail } from '@/app/ui/emails/investment-confirmation';
 import postgres from 'postgres';
+import { connection } from 'next/server';
+
 
 const db = postgres(process.env.POSTGRES_URL!);
 
@@ -697,51 +699,47 @@ export async function fetchAllInvestments() {
     const data = await sql`
       SELECT 
         investments.*, 
-        users.name -- Using 'name' since 'first_name' and 'surname' don't exist
+        users.name
       FROM investments
       JOIN users ON investments.member_email = users.email
       ORDER BY investments.created_at DESC
     `;
     
-    // Ensure we are working with the rows array
     const rows = Array.isArray(data) ? data : (data as any).rows || [];
 
-    // Map through and calculate the time-based ROI
-    const investments = rows.map((inv: any) => {
+    return rows.map((inv: any) => {
       const startDate = new Date(inv.created_at);
       const today = new Date();
       
-      // 1. Calculate the difference in days
+      // 1. Calculate days elapsed
       const diffTime = Math.abs(today.getTime() - startDate.getTime());
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
       
-      /** * 2. THE SFORTE LOGIC: 
-       * Math.ceil rounds UP. 
-       * 0.1 days = 1 month
-       * 30.1 days = 2 months
-       */
-      const monthsElapsed = Math.ceil(diffDays / 30) || 1; 
+      // 2. Calculate the Cycle (Month 1, Month 2, etc.)
+      const currentCycle = Math.ceil(diffDays / 30) || 1; 
 
       const monthlyInterest = Number(inv.monthly_interest) || 0;
       const principal = Number(inv.amount) || 0;
-      const totalRoi = monthsElapsed * monthlyInterest;
+      
+      // 3. Calculate Accrued ROI 
+      // If you want them to earn ROI immediately in Month 1, use currentCycle.
+      // If ROI starts after the first 30 days, use (currentCycle - 1).
+      const totalRoi = currentCycle * monthlyInterest;
 
-      // Handle the name split if your UI still expects first_name/surname
+      // 4. Handle name splitting for the UI
       const nameParts = inv.name ? inv.name.trim().split(' ') : ['Member'];
       const firstName = nameParts[0];
       const surname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
 
       return {
         ...inv,
-        first_name: firstName, // Mapping back to UI expectations
+        first_name: firstName,
         surname: surname,
-        months_counted: monthsElapsed,
-        total_roi_due: totalRoi,
-        total_due: principal + totalRoi,
+        display_cycle: currentCycle,         // Matches the Table UI
+        accrued_roi: totalRoi,               // Matches the Table UI
+        current_total_balance: principal + totalRoi, // Matches the Table UI
       };
     });
-
-    return investments; 
   } catch (error) {
     console.error('Database Error:', error);
     return [];
@@ -785,35 +783,51 @@ export async function fetchInvestments(query: string = '') {
         ORDER BY i.created_at DESC`;
     }
 
-    // Ensure we have an array of rows
     const rows = Array.isArray(data) ? data : (data as any).rows || [];
 
-    // --- SFORTE ROI CALCULATION LOGIC ---
     return rows.map((inv: any) => {
+      // 1. DATE NORMALIZATION (Fixes the "March 26" timestamp issue)
       const startDate = new Date(inv.created_at);
       const today = new Date();
       
-      // Calculate day difference
-      const diffTime = Math.abs(today.getTime() - startDate.getTime());
-      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      // We set both dates to Midnight to ensure we count calendar days
+      const startMid = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       
-      /** * CEILING LOGIC:
-       * 0-30 days = 1 month
-       * 31-60 days = 2 months
-       * 61+ days = 3 months
-       */
-      const monthsElapsed = Math.ceil(diffDays / 30) || 1; 
+      // Calculate day difference
+      const diffTime = Math.abs(todayMid.getTime() - startMid.getTime());
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      // 2. CYCLE LOGIC
+      // 0-29 days = Month 1
+      // 30+ days = Month 2
+      // March 26 to April 29 = 34 days, which results in Month 2.
+      const currentCycle = Math.floor(diffDays / 30) + 1; 
 
+      // 3. SAFE ROI CALCULATION
       const principal = Number(inv.amount) || 0;
-      const monthlyInterest = Number(inv.monthly_interest) || 0;
-      const totalRoi = monthsElapsed * monthlyInterest;
+      const totalPlannedInterest = Number(inv.monthly_interest) || 0; 
+      const duration = parseInt(inv.duration) || 1;
+      
+      // Calculate yield per single month to avoid multiplying total interest by cycles
+      const monthlyYield = totalPlannedInterest / duration;
+      const accruedRoi = monthlyYield * currentCycle;
 
       return {
         ...inv,
-        // These new fields can now be used in your Table UI
-        months_counted: monthsElapsed,
-        total_roi_due: totalRoi,
-        total_due: principal + totalRoi,
+        // UI Dashboard specific keys
+        display_cycle: currentCycle,
+        accrued_roi: accruedRoi,
+        current_total_balance: principal + accruedRoi,
+        
+        // Legacy/Backwards compatibility keys
+        months_counted: currentCycle,
+        total_roi_due: accruedRoi,
+        total_due: principal + accruedRoi,
+        
+        // Ensure name fields are populated
+        first_name: inv.first_name || 'Member',
+        surname: inv.surname || ''
       };
     });
 

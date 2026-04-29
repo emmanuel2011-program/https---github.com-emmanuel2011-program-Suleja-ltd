@@ -52,7 +52,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
         />
       </div>
 
-      {/* --- TOP HIGHLIGHT CARD (Now Mobile Friendly) --- */}
+      {/* --- TOP HIGHLIGHT CARD --- */}
       {selectedInv && !isModalOpen && (
         <div className="bg-blue-900 text-white p-5 md:p-8 rounded-2xl shadow-xl animate-in zoom-in-95 duration-200 relative overflow-hidden border-b-4 border-blue-500">
           <button 
@@ -71,14 +71,13 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
               <p className="text-blue-200 text-xs md:text-base font-bold truncate">{selectedInv.member_email}</p>
             </div>
             <div className="md:text-right">
-              <p className="text-blue-400 text-[9px] font-black uppercase tracking-widest">Total Principal</p>
+              <p className="text-blue-400 text-[9px] font-black uppercase tracking-widest">Total Value (Principal + ROI)</p>
               <p className="text-3xl md:text-5xl font-black text-green-400 mt-1">
-                ₦{Number(selectedInv.amount).toLocaleString()}
+                ₦{(selectedInv.current_total_balance || selectedInv.amount).toLocaleString()}
               </p>
             </div>
           </div>
 
-          {/* Details Grid: Stacks on mobile */}
           <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-blue-800 pt-6">
             <div>
               <p className="text-blue-400 text-[8px] font-black uppercase mb-0.5">Joined</p>
@@ -87,12 +86,12 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
               </p>
             </div>
             <div>
-              <p className="text-blue-400 text-[8px] font-black uppercase mb-0.5">Monthly ROI</p>
-              <p className="font-bold text-sm md:text-lg text-green-400">₦{Number(selectedInv.monthly_interest).toLocaleString()}</p>
+              <p className="text-blue-400 text-[8px] font-black uppercase mb-0.5">Accrued ROI</p>
+              <p className="font-bold text-sm md:text-lg text-green-400">₦{(selectedInv.accrued_roi || 0).toLocaleString()}</p>
             </div>
             <div className="hidden sm:block">
-              <p className="text-blue-400 text-[8px] font-black uppercase mb-0.5">Term</p>
-              <p className="font-bold text-sm md:text-lg">{selectedInv.duration}</p>
+              <p className="text-blue-400 text-[8px] font-black uppercase mb-0.5">Current Cycle</p>
+              <p className="font-bold text-sm md:text-lg">Month {selectedInv.display_cycle || 1}</p>
             </div>
             <div>
               <p className="text-blue-400 text-[8px] font-black uppercase mb-0.5">Status</p>
@@ -113,11 +112,11 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-[10px] md:text-[11px] font-black uppercase tracking-widest text-gray-600">
               <tr>
                 <th className="px-4 md:px-6 py-4">Customer Details</th>
-                <th className="px-4 md:px-6 py-4">Amount</th>
+                <th className="px-4 md:px-6 py-4">Total Balance</th>
                 <th className="hidden lg:table-cell px-6 py-4">Applied Date</th>
-                <th className="hidden lg:table-cell px-6 py-4 text-green-700">ROI</th>
+                <th className="hidden lg:table-cell px-6 py-4 text-green-700">Accrued ROI</th>
                 <th className="px-4 md:px-6 py-4 text-center">Receipt</th>
-                <th className="px-4 md:px-6 py-4 text-center">Actions</th>
+                <th className="px-4 md:px-6 py-4 text-center">Status/Cycle</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -144,20 +143,19 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
                         </div>
                       </td>
                       <td className="px-4 md:px-6 py-4">
-                        <p className="font-black text-gray-900 text-sm md:text-base">₦{Number(inv.amount).toLocaleString()}</p>
+                        <p className="font-black text-gray-900 text-sm md:text-base">₦{(inv.current_total_balance || inv.amount).toLocaleString()}</p>
                         <p className="lg:hidden text-[8px] text-green-600 font-bold tracking-tight">
-                          +₦{Number(inv.monthly_interest).toLocaleString()} ROI
+                          +₦{(inv.accrued_roi || 0).toLocaleString()} Total ROI
                         </p>
                       </td>
 
-                      {/* DESKTOP ONLY */}
                       <td className="hidden lg:table-cell px-6 py-4">
                         <p className="text-xs font-bold text-gray-600">
                           {inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-NG') : 'N/A'}
                         </p>
                       </td>
                       <td className="hidden lg:table-cell px-6 py-4 text-green-700 font-bold text-sm">
-                        ₦{Number(inv.monthly_interest).toLocaleString()}
+                        ₦{(inv.accrued_roi || 0).toLocaleString()}
                       </td>
 
                       <td className="px-4 md:px-6 py-4 text-center">
@@ -181,7 +179,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
                           <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
                             isActive ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-amber-100 text-amber-700'
                           }`}>
-                            {inv.status || 'pending'}
+                            {isActive ? `Month ${inv.display_cycle || 1}` : (inv.status || 'pending')}
                           </span>
                           {isActive && (
                             <button 
@@ -196,7 +194,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
                       </td>
                     </tr>
 
-                    {/* --- MOBILE EXPANDED (Improved Spacing) --- */}
+                    {/* --- MOBILE EXPANDED --- */}
                     {isExpanded && (
                       <tr className="lg:hidden bg-blue-50/30 animate-in slide-in-from-top-1 duration-200">
                         <td colSpan={6} className="px-4 md:px-6 py-4 border-l-4 border-blue-500">
@@ -211,9 +209,9 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
                             </div>
                             <div>
                                <p className="text-[8px] font-black text-gray-400 uppercase flex items-center gap-1 mb-1">
-                                 <ClockIcon className="h-3 w-3" /> Duration
+                                 <ClockIcon className="h-3 w-3" /> Duration / Cycle
                                </p>
-                               <p className="text-xs font-bold text-gray-800">{inv.duration}</p>
+                               <p className="text-xs font-bold text-gray-800">Month {inv.display_cycle || 1}</p>
                             </div>
                             <div className="col-span-2">
                                <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Payout Account</p>
@@ -229,9 +227,6 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
             </tbody>
           </table>
         </div>
-        {filteredInvestments.length === 0 && (
-          <div className="p-16 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No records found.</div>
-        )}
       </div>
 
       {/* --- WITHDRAWAL MODAL --- */}
@@ -247,7 +242,7 @@ export default function InvestmentTable({ initialInvestments }: { initialInvestm
             <WithdrawalForm 
               investmentId={selectedInv.id} 
               email={selectedInv.member_email} 
-              currentBalance={selectedInv.amount} 
+              currentBalance={selectedInv.current_total_balance || selectedInv.amount} 
             />
           </div>
         </div>
