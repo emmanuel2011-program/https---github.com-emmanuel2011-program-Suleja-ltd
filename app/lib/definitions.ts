@@ -1,3 +1,11 @@
+export type MemberField = {
+  id: string;
+  first_name: string;
+  surname: string;
+  email: string;
+  // add other fields returned by your SQL query if needed
+};
+
 export type User = {
   id: string;
   name: string;

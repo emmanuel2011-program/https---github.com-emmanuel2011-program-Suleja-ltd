@@ -28,7 +28,7 @@ export default function ContactPage() {
               Headquarters
             </h2>
             <p className="text-gray-700 text-sm leading-relaxed">
-              Behind Old Timer Shed, Suleja <br />
+              Behind Old Timber Shed, Suleja <br />
               Niger State, Nigeria.
             </p>
           </div>

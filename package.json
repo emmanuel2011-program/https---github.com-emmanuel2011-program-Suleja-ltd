@@ -7,11 +7,12 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@react-email/components": "^1.0.8",
+    "@react-email/render": "^2.0.4",
     "@tailwindcss/forms": "^0.5.10",
     "@vercel/blob": "^2.3.0",
     "@vercel/postgres": "^0.10.0",
     "autoprefixer": "10.4.20",
-    "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "next": "latest",
@@ -34,7 +35,9 @@
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "22.10.7",
     "@types/react": "19.0.7",
-    "@types/react-dom": "19.0.3"
+    "@types/react-dom": "19.0.3",
+    "baseline-browser-mapping": "^2.10.21",
+    "prettier": "^3.8.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
