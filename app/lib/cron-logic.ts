@@ -12,21 +12,22 @@ export async function sendDailyReminders() {
     // 1. UPDATED QUERY: 
     // Targets loans where the repayment_date is EXACTLY tomorrow.
     const overdueLoans = await sql`
-      SELECT 
-        email, 
-        first_name, 
-        loan_amount, 
-        interest,
-        request_date,
-        amount_paid,
-        repayment_date 
-      FROM loan_applications 
-      WHERE LOWER(TRIM(status)) = 'approved'
-      -- Logic: Send if (Today + 1 Day) matches the Repayment Date
-      AND repayment_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
-      AND (amount_paid::numeric < loan_amount::numeric)
-    `;
-
+  SELECT 
+    email, 
+    first_name, 
+    loan_amount, 
+    interest,
+    request_date,
+    amount_paid,
+    repayment_date 
+  FROM loan_applications 
+  WHERE LOWER(TRIM(status)) = 'approved'
+    -- 1. Catch anything due tomorrow OR anytime in the past
+    AND repayment_date::date <= ((CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos') + INTERVAL '1 day')::date
+    -- 2. Ensure they still actually owe money
+    AND (amount_paid::numeric < loan_amount::numeric)
+  ORDER BY repayment_date ASC
+`;
     console.log(`Cron Task: Found ${overdueLoans.length} loans due tomorrow.`);
 
     const results = [];
